@@ -481,4 +481,22 @@ BEGIN
         ('inventory_low', 'inventory_item', (SELECT id FROM inventory_items WHERE item_code = 'GLOVES-M' LIMIT 1), NOW() - interval '1 hour', '{"item":"GLOVES-M","qty":3}'::jsonb),
         ('bed_status_changed', 'bed', bed_14, NOW() - interval '3 hours', '{"old_status":"occupied","new_status":"blocked","reason":"discharge_chain"}'::jsonb);
 
-END $$;
+    -- Ensure auth.identities exist for email login
+    INSERT INTO auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
+    SELECT
+        gen_random_uuid(),
+        u.id,
+        jsonb_build_object('sub', u.id::text, 'email', u.email, 'email_verified', true, 'phone_verified', false),
+        'email',
+        u.id::text,
+        NOW(),
+        NOW(),
+        NOW()
+    FROM auth.users u
+    WHERE NOT EXISTS (SELECT 1 FROM auth.identities i WHERE i.user_id = u.id);
+
+    UPDATE auth.users
+    SET confirmation_token = '', recovery_token = '', email_change = '', email_change_token_new = ''
+    WHERE confirmation_token IS NULL OR recovery_token IS NULL OR email_change IS NULL OR email_change_token_new IS NULL;
+
+END $;
