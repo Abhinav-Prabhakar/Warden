@@ -37,7 +37,7 @@ body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
     0 8px 18px rgba(0, 0, 0, 0.40);
 }
 
-/* User-Specified Bed Glows */
+/* User-Specified Bed Glows (Ward Screen) */
 .bed-glow-green {
   background-color: rgba(30, 230, 57, 0.20);
   box-shadow: 0 0 250px 80px rgba(30, 230, 57, 0.10);
@@ -52,3 +52,50 @@ body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
   background-color: rgba(230, 30, 30, 0.40);
   box-shadow: 0 0 250px 80px rgba(230, 30, 30, 0.20);
 }
+
+/* User-Specified Shelf Glows (Pharmacy Screen)
+   Drop shadow: blur 250, spread 80, opacity 25%
+   Cyan: #1ECCE6, 50% opacity
+   Green: #24A951, 50% opacity
+   Orange: #E67F1E, 50% opacity
+   Magenta: #E61E67, 50% opacity
+*/
+.shelf-glow-cyan {
+  background-color: rgba(30, 204, 230, 0.50);
+  box-shadow: 0 0 250px 80px rgba(30, 204, 230, 0.25);
+}
+
+.shelf-glow-green {
+  background-color: rgba(36, 169, 81, 0.50);
+  box-shadow: 0 0 250px 80px rgba(36, 169, 81, 0.25);
+}
+
+.shelf-glow-orange {
+  background-color: rgba(230, 127, 30, 0.50);
+  box-shadow: 0 0 250px 80px rgba(230, 127, 30, 0.25);
+}
+
+.shelf-glow-magenta {
+  background-color: rgba(230, 30, 103, 0.50);
+  box-shadow: 0 0 250px 80px rgba(230, 30, 103, 0.25);
+}
+
+/* Shelf Light Fixture Glow
+   Color: #E8FCFF at 60% opacity
+   Directional downward glow: linear gradient from #E8FCFF 5% to 1%, layer blur 250
+*/
+.shelf-light-bar {
+  background-color: rgba(232, 252, 255, 0.60);
+  box-shadow: 0 0 16px 2px rgba(232, 252, 255, 0.40);
+}
+
+.shelf-light-downward-glow {
+  background: linear-gradient(
+    to bottom,
+    rgba(232, 252, 255, 0.05) 0%,
+    rgba(232, 252, 255, 0.01) 100%
+  );
+  filter: blur(250px);
+  -webkit-filter: blur(250px);
+}
+
