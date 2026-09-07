@@ -1,0 +1,393 @@
+"use client";
+
+import { useState, useRef, useEffect, useCallback } from "react";
+import { VoiceConfig, DEFAULT_VOICE_CONFIG } from "@/lib/voice/types";
+import { OrbState } from "thinking-orbs";
+
+export function useVoiceAgent() {
+  const [voiceConfig, setVoiceConfig] = useState<VoiceConfig>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("warden_voice_config");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
+    }
+    return DEFAULT_VOICE_CONFIG;
+  });
+
+  const [orbState, setOrbState] = useState<OrbState>("listening");
+  const [orbSpeed, setOrbSpeed] = useState<number>(1);
+  const [statusText, setStatusText] = useState<string>("Ready");
+  const [transcript, setTranscript] = useState<string>("");
+  const [lastResponse, setLastResponse] = useState<string>("");
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
+
+  // Audio & speech references
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const accumulatedSpeechRef = useRef<string>("");
+  const currentAudioElementRef = useRef<HTMLAudioElement | null>(null);
+  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isHoldingRef = useRef<boolean>(false);
+  const isSynthesizingRef = useRef<boolean>(false);
+
+  // Save config to localStorage
+  const updateConfig = useCallback((newConfig: VoiceConfig) => {
+    setVoiceConfig(newConfig);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("warden_voice_config", JSON.stringify(newConfig));
+    }
+  }, []);
+
+  // Play audio buffer from TTS
+  const playAudioBlob = useCallback(async (blob: Blob): Promise<void> => {
+    return new Promise((resolve) => {
+      try {
+        if (currentAudioElementRef.current) {
+          currentAudioElementRef.current.pause();
+          currentAudioElementRef.current = null;
+        }
+
+        const audioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(audioUrl);
+        currentAudioElementRef.current = audio;
+
+        audio.onplay = () => {
+          setIsPlayingAudio(true);
+          setOrbState("composing"); // Dynamic animated speaking state
+          setOrbSpeed(1.25);
+          setStatusText("Warden Speaking");
+        };
+
+        audio.onended = () => {
+          setIsPlayingAudio(false);
+          setOrbState("listening");
+          setOrbSpeed(1.0);
+          setStatusText("Listening");
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+
+        audio.onerror = (e) => {
+          console.warn("Audio playback error:", e);
+          setIsPlayingAudio(false);
+          setOrbState("listening");
+          setOrbSpeed(1.0);
+          resolve();
+        };
+
+        audio.play().catch((err) => {
+          console.warn("Autoplay was prevented or error occurred:", err);
+          setIsPlayingAudio(false);
+          setOrbState("listening");
+          resolve();
+        });
+      } catch (err) {
+        console.error("Audio playback exception:", err);
+        resolve();
+      }
+    });
+  }, []);
+
+  // Synthesize text chunk with TTS
+  const synthesizeText = useCallback(
+    async (text: string): Promise<void> => {
+      if (!text || !text.trim()) return;
+      isSynthesizingRef.current = true;
+
+      try {
+        if (voiceConfig.tts.provider === "browser_speech") {
+          if (typeof window !== "undefined" && "speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.05;
+            utterance.onstart = () => {
+              setIsPlayingAudio(true);
+              setOrbState("composing");
+              setOrbSpeed(1.25);
+            };
+            utterance.onend = () => {
+              setIsPlayingAudio(false);
+              setOrbState("listening");
+              setOrbSpeed(1.0);
+            };
+            window.speechSynthesis.speak(utterance);
+          }
+          return;
+        }
+
+        const res = await fetch("/api/voice/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text,
+            provider: voiceConfig.tts.provider,
+            speaker: voiceConfig.tts.speaker,
+            modelId: voiceConfig.tts.modelId,
+            speedAlpha: voiceConfig.tts.speedAlpha,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`TTS failed with status ${res.status}`);
+        }
+
+        const blob = await res.blob();
+        await playAudioBlob(blob);
+      } catch (err: any) {
+        console.warn("TTS synthesis error:", err?.message);
+        // Fallback to browser synthesis if online TTS provider fails
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          window.speechSynthesis.speak(utterance);
+        }
+      } finally {
+        isSynthesizingRef.current = false;
+      }
+    },
+    [voiceConfig, playAudioBlob]
+  );
+
+  // Dispatch spoken transcript to LLM chat stream
+  const processUserSpeech = useCallback(
+    async (userText: string) => {
+      if (!userText || !userText.trim()) return;
+      const cleanInput = userText.trim();
+      setTranscript(cleanInput);
+      setStatusText("Thinking...");
+      setOrbState("searching"); // Orb state while reasoning
+      setOrbSpeed(1.4);
+
+      let fullResponseText = "";
+      let sentenceBuffer = "";
+
+      try {
+        const response = await fetch("/api/voice/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: cleanInput,
+            provider: voiceConfig.llm.provider,
+            model: voiceConfig.llm.model,
+            stream: voiceConfig.llm.stream,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Chat failed with status ${response.status}`);
+        }
+
+        if (!voiceConfig.llm.stream) {
+          const json = await response.json();
+          fullResponseText = json.text || "";
+          setLastResponse(fullResponseText);
+          await synthesizeText(fullResponseText);
+          return;
+        }
+
+        // Handle SSE Stream
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (!reader) {
+          throw new Error("No readable stream available");
+        }
+
+        let isFirstAudioChunk = true;
+        let sseBuffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          sseBuffer += decoder.decode(value, { stream: true });
+          const lines = sseBuffer.split("\n");
+          sseBuffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+            try {
+              const data = JSON.parse(trimmed.slice(5).trim());
+              if (data.text) {
+                fullResponseText += data.text;
+                sentenceBuffer += data.text;
+                setLastResponse(fullResponseText);
+
+                // If streaming chunk synthesis is enabled, speak as sentences complete
+                if (
+                  voiceConfig.tts.streamSSE &&
+                  (/[.!?:;]\s$/.test(sentenceBuffer) ||
+                    (isFirstAudioChunk && sentenceBuffer.length > 45))
+                ) {
+                  const chunkToSpeak = sentenceBuffer.trim();
+                  sentenceBuffer = "";
+                  isFirstAudioChunk = false;
+                  await synthesizeText(chunkToSpeak);
+                }
+              }
+            } catch (e) {}
+          }
+        }
+
+        // Synthesize any remaining sentence buffer
+        if (sentenceBuffer.trim()) {
+          await synthesizeText(sentenceBuffer.trim());
+        }
+      } catch (err: any) {
+        console.error("Voice processing error:", err);
+        const fallbackMsg = "Acknowledged. Live ward status updated.";
+        setLastResponse(fallbackMsg);
+        await synthesizeText(fallbackMsg);
+      } finally {
+        setStatusText("Ready");
+        setOrbState("listening");
+        setOrbSpeed(1.0);
+      }
+    },
+    [voiceConfig, synthesizeText]
+  );
+
+  // Initialize Web Speech Recognition
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      console.warn("Web Speech Recognition not supported in this browser.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = voiceConfig.stt.language || "en-US";
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setStatusText("Listening");
+      setOrbState("listening");
+    };
+
+    recognition.onresult = (event: any) => {
+      let interim = "";
+      let final = "";
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          final += event.results[i][0].transcript;
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+
+      const spoken = (final || interim).trim();
+      if (spoken) {
+        accumulatedSpeechRef.current = spoken;
+        setTranscript(spoken);
+
+        // Orb reacts dynamically to incoming voice energy
+        setOrbState("breathing");
+        setOrbSpeed(1.5);
+
+        // Reset silence timer on pause detection
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+        }
+
+        silenceTimerRef.current = setTimeout(() => {
+          const textToProcess = accumulatedSpeechRef.current;
+          accumulatedSpeechRef.current = "";
+          if (textToProcess) {
+            processUserSpeech(textToProcess);
+          }
+        }, voiceConfig.stt.silenceTimeoutMs);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      if (event.error !== "no-speech") {
+        console.warn("Speech recognition error:", event.error);
+      }
+    };
+
+    recognition.onend = () => {
+      // Keep listening continuous unless disabled
+      try {
+        if (!isSynthesizingRef.current) {
+          recognition.start();
+        }
+      } catch (e) {}
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, [voiceConfig.stt.language, voiceConfig.stt.silenceTimeoutMs, processUserSpeech]);
+
+  // Click & hold orb for 5 seconds to open settings modal
+  const handleOrbMouseDown = () => {
+    isHoldingRef.current = true;
+    holdTimerRef.current = setTimeout(() => {
+      if (isHoldingRef.current) {
+        setIsSettingsOpen(true);
+      }
+    }, 5000); // 5 seconds hold trigger
+  };
+
+  const handleOrbMouseUp = () => {
+    isHoldingRef.current = false;
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  };
+
+  const toggleVoiceSession = () => {
+    if (isRecording) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsRecording(false);
+      setStatusText("Paused");
+    } else {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch (e) {}
+      }
+      setIsRecording(true);
+      setStatusText("Listening");
+    }
+  };
+
+  return {
+    voiceConfig,
+    updateConfig,
+    orbState,
+    orbSpeed,
+    statusText,
+    transcript,
+    lastResponse,
+    isSettingsOpen,
+    setIsSettingsOpen,
+    isRecording,
+    isPlayingAudio,
+    handleOrbMouseDown,
+    handleOrbMouseUp,
+    toggleVoiceSession,
+    processUserSpeech,
+  };
+}

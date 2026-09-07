@@ -37,6 +37,11 @@ body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
     0 8px 18px rgba(0, 0, 0, 0.40);
 }
 
+/* Subtle dark drop shadow for main transparent render with high blur */
+.main-image-shadow {
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.15));
+}
+
 /* User-Specified Bed Glows (Ward Screen) */
 .bed-glow-green {
   background-color: rgba(30, 230, 57, 0.20);

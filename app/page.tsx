@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { ThinkingOrb } from "thinking-orbs";
+import { useVoiceAgent } from "@/lib/voice/useVoiceAgent";
+import { VoiceSettingsModal } from "@/app/components/VoiceSettingsModal";
 
 interface BedOverlay {
   id: string;
@@ -258,7 +260,28 @@ export default function WardenMainScreen() {
     BASE_WAVEFORM.map(() => 1)
   );
 
+  // Modular Voice Agent Hook
+  const {
+    voiceConfig,
+    updateConfig,
+    orbState,
+    orbSpeed,
+    statusText: voiceStatusText,
+    transcript,
+    lastResponse,
+    isSettingsOpen,
+    setIsSettingsOpen,
+    isRecording,
+    isPlayingAudio,
+    handleOrbMouseDown,
+    handleOrbMouseUp,
+    toggleVoiceSession,
+    processUserSpeech,
+  } = useVoiceAgent();
+
   // Swipe gesture detection state
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const mouseStartXRef = useRef<number | null>(null);
@@ -285,37 +308,9 @@ export default function WardenMainScreen() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Touch Swipe Handlers
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartXRef.current = e.touches[0].clientX;
-    touchStartYRef.current = e.touches[0].clientY;
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartXRef.current === null) return;
-    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
-    const deltaY = touchStartYRef.current
-      ? e.changedTouches[0].clientY - touchStartYRef.current
-      : 0;
-
-    // Horizontal swipe threshold: 45px, more horizontal than vertical
-    if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY)) {
-      if (deltaX < 0) {
-        // Swipe Left -> next screen
-        setActiveScreen((prev) => (prev < 2 ? ((prev + 1) as 0 | 1 | 2) : prev));
-      } else {
-        // Swipe Right -> prev screen
-        setActiveScreen((prev) => (prev > 0 ? ((prev - 1) as 0 | 1 | 2) : prev));
-      }
-    }
-    touchStartXRef.current = null;
-    touchStartYRef.current = null;
-  };
-
-  // Mouse Drag Swipe Handlers for Desktop
-  const handleMouseDown = (e: React.MouseEvent) => {
+  // Swipe / Drag Interaction Logic
+  const handleDragStart = (clientX: number, target: HTMLElement) => {
     // Only initiate swipe if clicking directly on the background / non-interactive area
-    const target = e.target as HTMLElement;
     if (
       target.tagName === "BUTTON" ||
       target.tagName === "INPUT" ||
@@ -326,38 +321,70 @@ export default function WardenMainScreen() {
       return;
     }
     isMouseDownRef.current = true;
-    mouseStartXRef.current = e.clientX;
+    setIsDragging(true);
+    mouseStartXRef.current = clientX;
+    setDragOffset(0);
   };
 
-  const handleMouseUp = (e: React.MouseEvent) => {
-    if (!isMouseDownRef.current || mouseStartXRef.current === null) return;
-    const deltaX = e.clientX - mouseStartXRef.current;
-    if (Math.abs(deltaX) > 45) {
-      if (deltaX < 0) {
+  const handleDragMove = (clientX: number) => {
+    if (!isDragging || mouseStartXRef.current === null) return;
+    const deltaX = clientX - mouseStartXRef.current;
+    
+    // Resistance when swiping past bounds
+    let limitedDelta = deltaX;
+    if ((activeScreen === 0 && deltaX > 0) || (activeScreen === 2 && deltaX < 0)) {
+      limitedDelta = deltaX * 0.25; 
+    }
+    
+    setDragOffset(limitedDelta);
+  };
+
+  const handleDragEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    isMouseDownRef.current = false;
+    
+    const threshold = window.innerWidth * 0.1; // 10% screen width to trigger
+    
+    if (Math.abs(dragOffset) > Math.max(threshold, 40)) {
+      if (dragOffset < 0) {
         setActiveScreen((prev) => (prev < 2 ? ((prev + 1) as 0 | 1 | 2) : prev));
       } else {
         setActiveScreen((prev) => (prev > 0 ? ((prev - 1) as 0 | 1 | 2) : prev));
       }
     }
-    isMouseDownRef.current = false;
+    
+    setDragOffset(0);
     mouseStartXRef.current = null;
   };
+
+  const handleTouchStart = (e: React.TouchEvent) => handleDragStart(e.touches[0].clientX, e.target as HTMLElement);
+  const handleTouchMove = (e: React.TouchEvent) => handleDragMove(e.touches[0].clientX);
+  const handleTouchEnd = () => handleDragEnd();
+
+  const handleMouseDown = (e: React.MouseEvent) => handleDragStart(e.clientX, e.target as HTMLElement);
+  const handleMouseMove = (e: React.MouseEvent) => handleDragMove(e.clientX);
+  const handleMouseUp = () => handleDragEnd();
+  const handleMouseLeave = () => { if (isDragging) handleDragEnd(); };
 
   return (
     <main
       onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className="relative w-screen h-screen bg-[#111319] overflow-hidden flex items-center justify-start select-none"
+      className="relative w-screen h-screen bg-[#2E333A] overflow-hidden flex items-center justify-center select-none cursor-grab active:cursor-grabbing"
     >
       {/* =========================================================================
           VIEWPORT CONTENT CONTAINER
-          Left-aligned: keeps exact background image aspect ratio and scales with height.
+          Centered: keeps exact background image aspect ratio and scales with viewport.
           All coordinates, glass cards, icons, and overlays anchor to this exact container.
          ========================================================================= */}
       <div
-        className={`relative h-full flex-shrink-0 transition-opacity duration-300 ${
+        className={`relative h-full max-w-full flex-shrink-0 transition-all duration-500 overflow-hidden ${
           activeScreen === 0 ? "aspect-[2750/1536]" : "aspect-[2760/1840]"
         }`}
       >
@@ -398,10 +425,16 @@ export default function WardenMainScreen() {
         </header>
 
         {/* =====================================================================
-            SCREEN 1: GENERAL WARD
+            SCREENS CONTAINER (Swiping Animation)
            ===================================================================== */}
-        {activeScreen === 0 && (
-          <div className="relative w-full h-full">
+        <div
+          className={`relative w-full h-full flex ${isDragging ? "" : "transition-transform duration-500 ease-in-out"}`}
+          style={{ transform: `translateX(calc(-${activeScreen * 100}% + ${dragOffset}px))` }}
+        >
+          {/* =====================================================================
+              SCREEN 1: GENERAL WARD
+             ===================================================================== */}
+          <div className="relative w-full h-full shrink-0">
             {/* Base 3D Ward Render */}
             <div className="absolute inset-0 w-full h-full">
               <Image
@@ -410,7 +443,7 @@ export default function WardenMainScreen() {
                 fill
                 priority
                 sizes="100vw"
-                className="object-contain pointer-events-none"
+                className="object-contain pointer-events-none main-image-shadow"
               />
             </div>
 
@@ -581,28 +614,39 @@ export default function WardenMainScreen() {
                 </div>
               </div>
 
-              {/* ThinkingOrb Anchored on Bottom-Right Corner */}
-              <div className="absolute -right-[14px] -bottom-[14px] z-30 pointer-events-auto">
-                <ThinkingOrb state="listening" size={64} />
+              {/* ThinkingOrb Anchored on Bottom-Right Corner with Voice State Reactivity & 5s Long-Press */}
+              <div
+                onMouseDown={handleOrbMouseDown}
+                onMouseUp={handleOrbMouseUp}
+                onTouchStart={handleOrbMouseDown}
+                onTouchEnd={handleOrbMouseUp}
+                onClick={toggleVoiceSession}
+                className="absolute -right-[14px] -bottom-[14px] z-30 pointer-events-auto cursor-pointer group"
+                title={`${voiceStatusText} (Click to toggle voice, click & hold 5s for settings)`}
+              >
+                <ThinkingOrb state={orbState} size={64} speed={orbSpeed} />
+                {isPlayingAudio && (
+                  <span className="absolute -top-6 right-0 text-[10px] bg-black/70 px-2 py-0.5 rounded text-[#1ECCE6] whitespace-nowrap pointer-events-none animate-pulse">
+                    Speaking
+                  </span>
+                )}
               </div>
             </div>
           </div>
-        )}
 
-        {/* =====================================================================
-            SCREEN 2: PHARMACY SHELF
-           ===================================================================== */}
-        {activeScreen === 1 && (
-          <div className="relative w-full h-full">
+          {/* =====================================================================
+              SCREEN 2: PHARMACY SHELF
+             ===================================================================== */}
+          <div className="relative w-full h-full shrink-0">
             {/* Base 3D Shelf Render */}
             <div className="absolute inset-0 w-full h-full">
               <Image
-                src="/medicine-shelf.png"
+                src="/medicine-shelf-transparent.png"
                 alt="Pharmacy Medicine Shelf"
                 fill
                 priority
                 sizes="100vw"
-                className="object-contain pointer-events-none"
+                className="object-contain pointer-events-none main-image-shadow"
               />
             </div>
 
@@ -781,19 +825,30 @@ export default function WardenMainScreen() {
                 </div>
               </div>
 
-              {/* ThinkingOrb Anchored on Bottom-Right Corner */}
-              <div className="absolute -right-[14px] -bottom-[14px] z-30 pointer-events-auto">
-                <ThinkingOrb state="listening" size={64} />
+              {/* ThinkingOrb Anchored on Bottom-Right Corner with Voice State Reactivity & 5s Long-Press */}
+              <div
+                onMouseDown={handleOrbMouseDown}
+                onMouseUp={handleOrbMouseUp}
+                onTouchStart={handleOrbMouseDown}
+                onTouchEnd={handleOrbMouseUp}
+                onClick={toggleVoiceSession}
+                className="absolute -right-[14px] -bottom-[14px] z-30 pointer-events-auto cursor-pointer group"
+                title={`${voiceStatusText} (Click to toggle voice, click & hold 5s for settings)`}
+              >
+                <ThinkingOrb state={orbState} size={64} speed={orbSpeed} />
+                {isPlayingAudio && (
+                  <span className="absolute -top-6 right-0 text-[10px] bg-black/70 px-2 py-0.5 rounded text-[#1ECCE6] whitespace-nowrap pointer-events-none animate-pulse">
+                    Speaking
+                  </span>
+                )}
               </div>
             </div>
           </div>
-        )}
 
-        {/* =====================================================================
-            SCREEN 3: PLACEHOLDER (Ready for future screens)
-           ===================================================================== */}
-        {activeScreen === 2 && (
-          <div className="relative w-full h-full flex flex-col items-center justify-center text-[#8E92A4]">
+          {/* =====================================================================
+              SCREEN 3: PLACEHOLDER (Ready for future screens)
+             ===================================================================== */}
+          <div className="relative w-full h-full shrink-0 flex flex-col items-center justify-center text-[#8E92A4]">
             <div className="text-[16px] font-medium tracking-[0.06em]">
               Ward Diagnostics & Telemetry Screen 3
             </div>
@@ -801,8 +856,16 @@ export default function WardenMainScreen() {
               Swipe left or click the swipe dots to navigate back
             </div>
           </div>
-        )}
+        </div>
       </div>
+
+      {/* Modular Voice Architecture Settings Modal (Triggered by 5s long-press on Orb) */}
+      <VoiceSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        config={voiceConfig}
+        onSave={updateConfig}
+      />
     </main>
   );
 }

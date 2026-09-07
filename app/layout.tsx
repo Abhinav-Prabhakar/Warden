@@ -21,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${urbanist.variable} h-full antialiased dark`}>
-      <body className="min-h-full bg-[#0C0E14] text-white font-sans overflow-hidden select-none">
+      <body className="min-h-full bg-[#2E333A] text-white font-sans overflow-hidden select-none">
         {children}
       </body>
     </html>

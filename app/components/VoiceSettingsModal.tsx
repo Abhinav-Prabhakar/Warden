@@ -1,0 +1,242 @@
+"use client";
+
+import React, { useState } from "react";
+import { VoiceConfig, STTProvider, LLMProvider, TTSProvider } from "@/lib/voice/types";
+
+interface VoiceSettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  config: VoiceConfig;
+  onSave: (newConfig: VoiceConfig) => void;
+}
+
+const RIME_SPEAKERS = [
+  "abbie",
+  "allison",
+  "astra",
+  "amber",
+  "colin",
+  "elena",
+  "eva",
+  "tyler",
+  "maya",
+  "luna",
+];
+
+export function VoiceSettingsModal({
+  isOpen,
+  onClose,
+  config,
+  onSave,
+}: VoiceSettingsModalProps) {
+  const [localConfig, setLocalConfig] = useState<VoiceConfig>(config);
+
+  if (!isOpen) return null;
+
+  const handleSave = () => {
+    onSave(localConfig);
+    onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-[6px] select-none"
+      onClick={onClose}
+    >
+      <div
+        className="figma-glass-card rounded-[22px] p-6 w-[420px] max-w-[92vw] flex flex-col gap-5 text-white animate-in fade-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div>
+            <h3 className="text-[17px] font-semibold tracking-[-0.01em]">
+              Voice Pipeline Configuration
+            </h3>
+            <p className="text-[11.5px] text-[#8E92A4] mt-[1px]">
+              Modular STT, LLM Streaming, and Rime TTS Engine
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-[#8E92A4] hover:text-white transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* STT Section */}
+        <div className="flex flex-col gap-2">
+          <label className="text-[11.5px] font-medium tracking-[0.04em] uppercase text-[#8E92A4]">
+            Speech-to-Text (STT) Engine
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { id: "web_speech", label: "Web Speech" },
+              { id: "groq", label: "Groq Whisper" },
+              { id: "openai", label: "OpenAI Whisper" },
+            ].map((stt) => (
+              <button
+                key={stt.id}
+                type="button"
+                onClick={() =>
+                  setLocalConfig({
+                    ...localConfig,
+                    stt: { ...localConfig.stt, provider: stt.id as STTProvider },
+                  })
+                }
+                className={`py-2 px-2 rounded-[10px] text-[11.5px] font-medium transition-all text-center border ${
+                  localConfig.stt.provider === stt.id
+                    ? "bg-white/15 border-white/40 text-white shadow-sm"
+                    : "bg-white/[0.03] border-white/5 text-[#8E92A4] hover:bg-white/[0.08]"
+                }`}
+              >
+                {stt.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-[#6D7282]">
+            Listens continuously until a natural pause/silence is detected.
+          </p>
+        </div>
+
+        {/* LLM Section */}
+        <div className="flex flex-col gap-2">
+          <label className="text-[11.5px] font-medium tracking-[0.04em] uppercase text-[#8E92A4]">
+            Reasoning Engine (LLM)
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { id: "groq", label: "Groq (Qwen 27B Turbo)", model: "qwen/qwen3.8-27b" },
+              { id: "openai", label: "OpenAI (GPT-4o mini)", model: "gpt-4o-mini" },
+            ].map((llm) => (
+              <button
+                key={llm.id}
+                type="button"
+                onClick={() =>
+                  setLocalConfig({
+                    ...localConfig,
+                    llm: {
+                      ...localConfig.llm,
+                      provider: llm.id as LLMProvider,
+                      model: llm.model,
+                    },
+                  })
+                }
+                className={`py-2 px-2.5 rounded-[10px] text-[11.5px] font-medium transition-all text-left border ${
+                  localConfig.llm.provider === llm.id
+                    ? "bg-white/15 border-white/40 text-white shadow-sm"
+                    : "bg-white/[0.03] border-white/5 text-[#8E92A4] hover:bg-white/[0.08]"
+                }`}
+              >
+                {llm.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center justify-between text-[11.5px] text-[#8E92A4] mt-1">
+            <span>Server-Sent Events (SSE) Streaming</span>
+            <input
+              type="checkbox"
+              checked={localConfig.llm.stream}
+              onChange={(e) =>
+                setLocalConfig({
+                  ...localConfig,
+                  llm: { ...localConfig.llm, stream: e.target.checked },
+                })
+              }
+              className="accent-[#1ECCE6] cursor-pointer"
+            />
+          </div>
+        </div>
+
+        {/* TTS Section */}
+        <div className="flex flex-col gap-2">
+          <label className="text-[11.5px] font-medium tracking-[0.04em] uppercase text-[#8E92A4]">
+            Text-to-Speech (TTS) Engine
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { id: "rime", label: "Rime AI" },
+              { id: "openai", label: "OpenAI TTS" },
+              { id: "browser_speech", label: "Browser Audio" },
+            ].map((tts) => (
+              <button
+                key={tts.id}
+                type="button"
+                onClick={() =>
+                  setLocalConfig({
+                    ...localConfig,
+                    tts: { ...localConfig.tts, provider: tts.id as TTSProvider },
+                  })
+                }
+                className={`py-2 px-2 rounded-[10px] text-[11.5px] font-medium transition-all text-center border ${
+                  localConfig.tts.provider === tts.id
+                    ? "bg-white/15 border-white/40 text-white shadow-sm"
+                    : "bg-white/[0.03] border-white/5 text-[#8E92A4] hover:bg-white/[0.08]"
+                }`}
+              >
+                {tts.label}
+              </button>
+            ))}
+          </div>
+
+          {localConfig.tts.provider === "rime" && (
+            <div className="flex flex-col gap-1.5 mt-1 bg-white/[0.02] p-2.5 rounded-[10px] border border-white/5">
+              <div className="flex items-center justify-between text-[11px] text-[#8E92A4]">
+                <span>Rime Speaker</span>
+                <select
+                  value={localConfig.tts.speaker}
+                  onChange={(e) =>
+                    setLocalConfig({
+                      ...localConfig,
+                      tts: { ...localConfig.tts, speaker: e.target.value },
+                    })
+                  }
+                  className="bg-[#1A1E26] border border-white/15 rounded-md px-2 py-0.5 text-white text-[11.5px] outline-none"
+                >
+                  {RIME_SPEAKERS.map((spk) => (
+                    <option key={spk} value={spk}>
+                      {spk}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-[#8E92A4]">
+                <span>Chunk Stream Synthesis</span>
+                <input
+                  type="checkbox"
+                  checked={localConfig.tts.streamSSE}
+                  onChange={(e) =>
+                    setLocalConfig({
+                      ...localConfig,
+                      tts: { ...localConfig.tts, streamSSE: e.target.checked },
+                    })
+                  }
+                  className="accent-[#1ECCE6] cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3.5 py-1.5 text-[12px] text-[#8E92A4] hover:text-white transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            className="px-4 py-1.5 text-[12px] font-medium bg-[#1ECCE6]/20 border border-[#1ECCE6]/40 text-[#1ECCE6] hover:bg-[#1ECCE6]/30 rounded-[8px] transition-all"
+          >
+            Save Pipeline
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
