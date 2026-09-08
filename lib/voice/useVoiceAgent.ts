@@ -48,6 +48,56 @@ export function useVoiceAgent() {
   const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isHoldingRef = useRef<boolean>(false);
   const isSynthesizingRef = useRef<boolean>(false);
+  const currentSpokenTextRef = useRef<string>("");
+  const proactiveCooldownRef = useRef<Set<string>>(new Set());
+
+  // Web Audio Chimes
+  const playHospitalAlertChime = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = "sine";
+      osc2.type = "sine";
+      osc1.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.15); // A5
+
+      gain.gain.setValueAtTime(0.16, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.15);
+      osc2.start(ctx.currentTime + 0.15);
+      osc2.stop(ctx.currentTime + 0.55);
+    } catch (e) {}
+  }, []);
+
+  const playCorrectionChime = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(820, ctx.currentTime);
+      osc.frequency.setValueAtTime(440, ctx.currentTime + 0.08);
+
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.22);
+    } catch (e) {}
+  }, []);
 
   // Save config to localStorage
   const updateConfig = useCallback((newConfig: VoiceConfig) => {
@@ -179,6 +229,7 @@ export function useVoiceAgent() {
         }
 
         const blob = await res.blob();
+        currentSpokenTextRef.current = text;
         await playAudioBlob(blob);
       } catch (err: any) {
         console.warn("TTS synthesis error:", err?.message);
@@ -193,6 +244,108 @@ export function useVoiceAgent() {
     },
     [voiceConfig, playAudioBlob]
   );
+
+  // Self-Invalidating Speech: Abort active speech mid-stream and speak correction (§4, §68 Rule 1 & 2)
+  const invalidateCurrentSpeech = useCallback(
+    async (reason: string, correctionText: string) => {
+      // 1. Immediately abort active audio playback
+      if (currentAudioElementRef.current) {
+        currentAudioElementRef.current.pause();
+        currentAudioElementRef.current = null;
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsPlayingAudio(false);
+      isSynthesizingRef.current = false;
+
+      // 2. Play distinct self-invalidation alert tone
+      playCorrectionChime();
+
+      // 3. Update status & thinking orb
+      setStatusText(`State Mutated: ${reason}`);
+      setOrbState("breathing");
+      setOrbSpeed(1.8);
+
+      // 4. Synthesize the immediate correction
+      const spokenCorrection = `Wait — state update: ${correctionText}`;
+      setLastResponse(spokenCorrection);
+      console.log(`[Warden Self-Invalidation] Aborted obsolete speech. Reason: ${reason}. Correction: ${correctionText}`);
+      await synthesizeText(spokenCorrection);
+    },
+    [playCorrectionChime, synthesizeText]
+  );
+
+  // Demonstration trigger for Self-Invalidation Scenario (§4)
+  const triggerSelfInvalidationDemo = useCallback(() => {
+    // 1. Warden begins speaking based on obsolete state
+    const initialAnswer = "Nurse Priya is currently available to transport Bed 8 down to imaging.";
+    setLastResponse(initialAnswer);
+    setStatusText("Warden Speaking (Initial State)");
+    synthesizeText(initialAnswer);
+
+    // 2. Mid-sentence state mutation (2.2 seconds in), Priya is assigned to Bed 3 STAT review
+    setTimeout(() => {
+      invalidateCurrentSpeech(
+        "Staff Assignment Mutated",
+        "Nurse Priya was just assigned to Bed 3 STAT review. Transporter Rahul is available for Bed 8 instead."
+      );
+    }, 2400);
+  }, [synthesizeText, invalidateCurrentSpeech]);
+
+  // Proactive Spontaneous Audio Callout Trigger (§57)
+  const triggerProactiveCallout = useCallback(
+    async (alertTitle: string, calloutSpeech: string) => {
+      if (isPlayingAudio || isRecording) return;
+      playHospitalAlertChime();
+      setStatusText(`Proactive Alert: ${alertTitle}`);
+      setOrbState("searching");
+      setOrbSpeed(1.5);
+      await new Promise((r) => setTimeout(r, 650)); // pause after chime
+      setLastResponse(calloutSpeech);
+      await synthesizeText(calloutSpeech);
+    },
+    [isPlayingAudio, isRecording, playHospitalAlertChime, synthesizeText]
+  );
+
+  // Background Proactive Monitoring Loop (every 18s)
+  useEffect(() => {
+    const checkProactiveAlerts = async () => {
+      if (isPlayingAudio || isRecording) return;
+      try {
+        const res = await fetch("/api/ward/bottlenecks");
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Check for Bed 3 Critical Deterioration alert
+        if (data.bottlenecks && Array.isArray(data.bottlenecks)) {
+          const statBottleneck = data.bottlenecks.find(
+            (b: any) => b.severity === "critical" || b.severity === "high"
+          );
+
+          if (statBottleneck && !proactiveCooldownRef.current.has(statBottleneck.id || statBottleneck.title)) {
+            const alertKey = statBottleneck.id || statBottleneck.title;
+            proactiveCooldownRef.current.add(alertKey);
+
+            // Cooldown for 5 minutes
+            setTimeout(() => {
+              proactiveCooldownRef.current.delete(alertKey);
+            }, 5 * 60 * 1000);
+
+            triggerProactiveCallout(
+              statBottleneck.title,
+              `Attention: Critical operational alert. ${statBottleneck.title}. ${statBottleneck.recommendedAction || "Immediate review required."}`
+            );
+          }
+        }
+      } catch (err) {
+        // Silent catch for background polling
+      }
+    };
+
+    const timer = setInterval(checkProactiveAlerts, 18000);
+    return () => clearInterval(timer);
+  }, [isPlayingAudio, isRecording, triggerProactiveCallout]);
 
   // Dispatch spoken transcript to LLM chat stream
   const processUserSpeech = useCallback(
@@ -520,5 +673,8 @@ export function useVoiceAgent() {
     handleOrbMouseUp,
     toggleVoiceSession,
     processUserSpeech,
+    invalidateCurrentSpeech,
+    triggerSelfInvalidationDemo,
+    triggerProactiveCallout,
   };
 }

@@ -9,6 +9,8 @@ import { StaffDirectoryCard } from "@/app/components/StaffDirectoryCard";
 import { SatelliteRadioCard } from "@/app/components/SatelliteRadioCard";
 import { EnergyEfficiencyCard } from "@/app/components/EnergyEfficiencyCard";
 import { TelephoneCallAssistantCard } from "@/app/components/TelephoneCallAssistantCard";
+import { NightShiftMemoryCard } from "@/app/components/NightShiftMemoryCard";
+import { IncomingAdmissionsCard } from "@/app/components/IncomingAdmissionsCard";
 
 interface BedOverlay {
   id: string;
@@ -319,6 +321,8 @@ export default function WardenMainScreen() {
   const [isRadioOpen, setIsRadioOpen] = useState<boolean>(false);
   const [isEfficiencyOpen, setIsEfficiencyOpen] = useState<boolean>(false);
   const [isPhoneOpen, setIsPhoneOpen] = useState<boolean>(false);
+  const [isMemoryOpen, setIsMemoryOpen] = useState<boolean>(false);
+  const [isAdmissionsOpen, setIsAdmissionsOpen] = useState<boolean>(false);
 
   // Live Beds state from Supabase
   const [beds, setBeds] = useState<BedOverlay[]>([]);
@@ -356,6 +360,8 @@ export default function WardenMainScreen() {
     handleOrbMouseUp,
     toggleVoiceSession,
     processUserSpeech,
+    triggerSelfInvalidationDemo,
+    triggerProactiveCallout,
   } = useVoiceAgent();
 
   // Swipe gesture detection state
@@ -661,10 +667,67 @@ export default function WardenMainScreen() {
           {activeScreen === 0 ? "General Ward" : activeScreen === 1 ? "Pharmacy" : "Diagnostics"}
         </div>
 
-        {/* Right Label with Floor Chevrons */}
-        <div className="flex items-center gap-1.5 text-[#8E92A4] text-[12px] font-medium tracking-[0.06em] pointer-events-auto">
+        {/* Right Label with Quick Controls & Floor Chevrons */}
+        <div className="flex items-center gap-2 text-[#8E92A4] text-[12px] font-medium tracking-[0.06em] pointer-events-auto">
           {activeScreen === 0 ? (
             <>
+              {/* Incoming Admissions Pill */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAdmissionsOpen((prev) => !prev);
+                  setIsMemoryOpen(false);
+                  setIsRadioOpen(false);
+                  setIsStaffOpen(false);
+                  setIsEfficiencyOpen(false);
+                  setIsPhoneOpen(false);
+                }}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  isAdmissionsOpen
+                    ? "bg-[#1ECCE6]/25 border-[#1ECCE6]/50 text-white shadow-[0_0_10px_rgba(30,204,230,0.3)]"
+                    : "bg-white/5 border-white/10 hover:bg-white/10 text-[#C6CBD9]"
+                }`}
+                title="Incoming Admissions Staging Queue (§20)"
+              >
+                <span>🚑 Admissions</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#1ECCE6] animate-pulse" />
+              </button>
+
+              {/* Night-Shift Memory Pill */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMemoryOpen((prev) => !prev);
+                  setIsAdmissionsOpen(false);
+                  setIsRadioOpen(false);
+                  setIsStaffOpen(false);
+                  setIsEfficiencyOpen(false);
+                  setIsPhoneOpen(false);
+                }}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  isMemoryOpen
+                    ? "bg-purple-500/25 border-purple-400/50 text-white shadow-[0_0_10px_rgba(168,85,247,0.3)]"
+                    : "bg-white/5 border-white/10 hover:bg-white/10 text-[#C6CBD9]"
+                }`}
+                title="Night-Shift Memory & Deferred Tasks (§29, §34)"
+              >
+                <span>🧠 Night Memory</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+              </button>
+
+              {/* Self-Invalidation Test Pill */}
+              <button
+                type="button"
+                onClick={() => triggerSelfInvalidationDemo()}
+                className="px-2 py-1 rounded-full text-[10.5px] font-medium bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 text-amber-200 transition-all cursor-pointer hidden md:flex items-center gap-1"
+                title="Test Self-Invalidating Speech Mid-Stream (§4, §68 Rule 1 & 2)"
+              >
+                <span>⚡ Test Invalidation</span>
+              </button>
+
+              <div className="h-4 w-px bg-white/10 mx-0.5" />
+
+              {/* Floor Chevrons */}
               <button
                 type="button"
                 onClick={() => {
@@ -903,6 +966,20 @@ export default function WardenMainScreen() {
             <TelephoneCallAssistantCard
               isOpen={isPhoneOpen}
               onClose={() => setIsPhoneOpen(false)}
+              currentFloor={currentFloor}
+            />
+
+            {/* Night-Shift Memory Glass Card (§29, §34) */}
+            <NightShiftMemoryCard
+              isOpen={isMemoryOpen}
+              onClose={() => setIsMemoryOpen(false)}
+              currentFloor={currentFloor}
+            />
+
+            {/* Incoming Admissions Staging Queue Glass Card (§20) */}
+            <IncomingAdmissionsCard
+              isOpen={isAdmissionsOpen}
+              onClose={() => setIsAdmissionsOpen(false)}
               currentFloor={currentFloor}
             />
 

@@ -77,12 +77,13 @@ Clicking any of the 11 beds populates the bottom-right glassmorphic card directl
 
 ### Frontend & API Layer (`app/`)
 - Built on Next.js 16 App Router with Turbopack.
-- REST endpoints under `/api/beds`, `/api/tasks`, `/api/ward`, `/api/voice/chat`, `/api/voice/tts`, `/api/voice/livekit`, `/api/print-queue`, `/api/simulation`, `/api/staff`, `/api/efficiency`, `/api/warden/radio`, `/api/warden/calls`.
+- REST endpoints under `/api/beds`, `/api/tasks`, `/api/ward`, `/api/voice/chat`, `/api/voice/tts`, `/api/voice/livekit`, `/api/print-queue`, `/api/simulation`, `/api/staff`, `/api/efficiency`, `/api/warden/radio`, `/api/warden/calls`, `/api/warden/memory`, `/api/warden/admissions`.
 
-### Operational Dock Cards (Left Navigation Bar)
-1. **Radio Inter-Ward Broadcasts (Dish Icon):**
+### Operational Dock Cards & Panels
+1. **Radio Inter-Ward Broadcasts & Cloud Printer Queue Drawer (Dish Icon):**
    - Transmits audio/text dispatches to other ward coordinators across floors.
    - Do Not Disturb (DND) toggle to temporarily block incoming live radio audio during emergency procedures; queued messages remain safely indexed for the voice agent to retrieve later.
+   - **Dedicated Cloud Printer Queue Panel (§19, §48):** Built directly into the card as a dedicated tab. Displays online laser printer hardware status (toner, paper trays), active queued/processing/printing/failed jobs, queue position `#1 Active`, job cancellation (`DELETE /api/print-queue/[id]`), retry (`POST /api/print-queue/[id]`), and STAT requisition dispatch with automatic duplicate prevention.
 2. **Staff Directory (Fingerprint Icon):**
    - Live roster of all nurses, physicians, and support staff on duty.
    - Specialization, active workload badges, and contact actions with swipe-left dismissal.
@@ -94,10 +95,19 @@ Clicking any of the 11 beds populates the bottom-right glassmorphic card directl
    - Live call session view with two-way conversation transcript.
    - Real-time clinical note extraction (e.g. breakthrough pain, hydration, ambulation assist).
    - Automatic closed-loop creation and dispatch of follow-up ward tasks into Supabase.
+5. **Night-Shift Memory & Deferred Tasks Scratchpad (§29, §34):**
+   - Dedicated glassmorphic memory card answering *"What am I forgetting?"* and *"What did I promise to do?"*.
+   - Stores spoken intentions and follow-up promises with countdown timers (`In 15m`, `Overdue 4m`) and one-click completion.
+6. **Incoming Admissions Staging Queue (§20):**
+   - Glassmorphic inbound transfer card tracking patients en-route to the ward with real-time ETA, admitting diagnosis, acuity, and special requirements (Isolation, Infusion pump).
+   - Live blocker awareness (bed cleaning ETA, pending doctor orders) and 1-click bed reservation and expedited cleaning actions.
 
-### Multi-Key Round-Robin Rotation
-- Enter multiple API keys separated by commas in the Voice Settings Modal (`Key1, Key2, Key3`).
-- Automatic round-robin rotation balances rate limits and recovers automatically from per-key quota exhaustion across Groq and TTS providers.
+### Self-Invalidating Speech Mid-Stream (§4, §68 Rule 1 & 2)
+- Warden monitors operational state mutability while speaking. If underlying ward state changes mid-sentence (e.g. Nurse Priya is assigned to a STAT emergency while Warden is speaking about her availability), Warden immediately aborts playback with a correction tone and utters: *"Wait — state update: Nurse Priya was just assigned to Bed 3 STAT review; Rahul is available instead."*
+- Includes a 1-click "⚡ Test Invalidation" header trigger for instant verification.
+
+### Proactive Spontaneous Audio Callouts (§57)
+- Warden continuously monitors ward anomalies in the background. When a critical vitals deterioration occurs (e.g. Bed 3 cardiac alert SpO2 90% / HR 118) or an unacknowledged STAT task is detected, Warden plays a hospital emergency chime and speaks a concise operational callout without waiting for user prompt.
 
 ### Backend Service Layer (`lib/services/`)
 - **`WardService`:** Central operational aggregator, temporal "What changed?" queries, and bed drilldown resolver.

@@ -26,6 +26,23 @@ export interface OnlineWarden {
   freq: string;
 }
 
+export interface PrintQueueItem {
+  id: string;
+  printer_id: string;
+  document_title: string;
+  document_type: string;
+  copies: number;
+  duplex: boolean;
+  priority: number;
+  status: "queued" | "processing" | "printing" | "completed" | "failed" | "cancelled";
+  queued_at: string;
+  queue_position?: number | null;
+  error_message?: string | null;
+  printer?: { id: string; name: string; status: string };
+  staff?: { display_name: string };
+  patient?: { first_name: string; last_name: string; medical_record_number: string };
+}
+
 interface SatelliteRadioCardProps {
   isOpen: boolean;
   onClose: () => void;
@@ -75,11 +92,16 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"transmissions" | "queued" | "wardens">("transmissions");
+  const [activeTab, setActiveTab] = useState<"transmissions" | "queued" | "printer" | "wardens">("transmissions");
   const [selectedTargetFloor, setSelectedTargetFloor] = useState<number>(8);
   const [dispatchText, setDispatchText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
+
+  // Cloud Print Queue State
+  const [printJobs, setPrintJobs] = useState<PrintQueueItem[]>([]);
+  const [isPrinterLoading, setIsPrinterLoading] = useState(false);
+  const [printNotice, setPrintNotice] = useState<string | null>(null);
 
   // Left swipe-to-close state
   const [dragOffset, setDragOffset] = useState(0);
@@ -110,12 +132,86 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
       .finally(() => setLoading(false));
   };
 
+  // Fetch Cloud Printer Queue
+  const fetchPrintQueue = () => {
+    setIsPrinterLoading(true);
+    fetch("/api/print-queue")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setPrintJobs(data);
+        }
+      })
+      .catch((err) => console.error("Printer queue fetch error:", err))
+      .finally(() => setIsPrinterLoading(false));
+  };
+
+  // Cancel Print Job
+  const handleCancelPrint = async (jobId: string) => {
+    try {
+      const res = await fetch(`/api/print-queue/${jobId}`, { method: "DELETE" });
+      if (res.ok) {
+        fetchPrintQueue();
+        setPrintNotice("Print job cancelled.");
+        setTimeout(() => setPrintNotice(null), 3000);
+      }
+    } catch (err) {
+      console.error("Failed to cancel job:", err);
+    }
+  };
+
+  // Retry Print Job
+  const handleRetryPrint = async (jobId: string) => {
+    try {
+      const res = await fetch(`/api/print-queue/${jobId}`, { method: "POST" });
+      if (res.ok) {
+        fetchPrintQueue();
+        setPrintNotice("Print job requeued.");
+        setTimeout(() => setPrintNotice(null), 3000);
+      }
+    } catch (err) {
+      console.error("Failed to retry job:", err);
+    }
+  };
+
+  // Create Quick Test Print
+  const handleQuickTestPrint = async () => {
+    try {
+      const res = await fetch("/api/print-queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentTitle: `STAT Lab Requisition — Floor ${currentFloor} Panel`,
+          documentType: "lab_requisition",
+          requestedBy: "7c8daee2-f764-4094-bbab-44cb42c86789", // staff ID
+          copies: 1,
+          duplex: false,
+          priority: 1,
+        }),
+      });
+      const data = await res.json();
+      if (data.duplicatePrevented) {
+        setPrintNotice("Duplicate print prevented (already active in queue).");
+      } else {
+        setPrintNotice("New STAT print job added to queue.");
+      }
+      fetchPrintQueue();
+      setTimeout(() => setPrintNotice(null), 4000);
+    } catch (err) {
+      console.error("Failed to submit test print:", err);
+    }
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     setLoading(true);
     setError(null);
     fetchRadioData();
-    const interval = setInterval(fetchRadioData, 10000); // 10s live polling
+    fetchPrintQueue();
+    const interval = setInterval(() => {
+      fetchRadioData();
+      fetchPrintQueue();
+    }, 10000);
     return () => clearInterval(interval);
   }, [isOpen, currentFloor]);
 
@@ -372,12 +468,26 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab("printer")}
+          className={`flex-1 py-1 rounded-lg font-medium transition-all flex items-center justify-center gap-1 ${
+            activeTab === "printer" ? "bg-white/15 text-white shadow-sm" : "text-[#8E92A4] hover:text-white"
+          }`}
+        >
+          <span>🖨️ Printer</span>
+          {printJobs.filter(j => j.status === 'queued' || j.status === 'printing').length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-[#1ECCE6] text-black text-[9px] font-bold">
+              {printJobs.filter(j => j.status === 'queued' || j.status === 'printing').length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab("wardens")}
           className={`flex-1 py-1 rounded-lg font-medium transition-all ${
             activeTab === "wardens" ? "bg-white/15 text-white shadow-sm" : "text-[#8E92A4] hover:text-white"
           }`}
         >
-          Network ({wardens.length})
+          Wardens ({wardens.length})
         </button>
       </div>
 
@@ -440,6 +550,143 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
                 </div>
               </div>
             ))}
+          </div>
+        ) : activeTab === "printer" ? (
+          /* Cloud Printer Queue Panel */
+          <div className="flex flex-col gap-2.5">
+            {/* Printer Hardware Telemetry */}
+            <div className="p-2.5 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-[#24A951] opacity-75 animate-ping" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#24A951]" />
+                </span>
+                <div>
+                  <div className="font-semibold text-white text-[11px]">Ward 4B Central Laser</div>
+                  <div className="text-[9px] text-[#8E92A4]">Floor 7 Station · Online · Toner 88%</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 text-[9px] font-mono text-[#8E92A4]">
+                <span className="px-1.5 py-0.5 rounded bg-white/10 text-[#82D99E]">Tray 1 Ready</span>
+              </div>
+            </div>
+
+            {printNotice && (
+              <div className="px-2.5 py-1.5 rounded-lg bg-[#1ECCE6]/15 border border-[#1ECCE6]/30 text-[#1ECCE6] text-[10.5px] font-medium flex items-center justify-between animate-in fade-in duration-150">
+                <span>ℹ️ {printNotice}</span>
+              </div>
+            )}
+
+            {isPrinterLoading && printJobs.length === 0 ? (
+              <div className="py-8 flex flex-col items-center justify-center gap-2 text-[#8E92A4] text-xs">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#1ECCE6] animate-ping" />
+                <span>Syncing cloud printer spooler...</span>
+              </div>
+            ) : printJobs.length === 0 ? (
+              <div className="py-8 text-center text-[#8E92A4] text-xs">
+                No active or queued print jobs on this station.
+              </div>
+            ) : (
+              printJobs.map((job) => {
+                const isPrinting = job.status === "printing";
+                const isQueued = job.status === "queued";
+                const isFailed = job.status === "failed";
+                const isCompleted = job.status === "completed";
+
+                return (
+                  <div
+                    key={job.id}
+                    className={`p-2.5 rounded-xl border transition-all ${
+                      isPrinting
+                        ? "bg-[#1ECCE6]/10 border-[#1ECCE6]/35 shadow-[0_0_12px_rgba(30,204,230,0.15)]"
+                        : isQueued
+                        ? "bg-[#E67F1E]/10 border-[#E67F1E]/30"
+                        : isFailed
+                        ? "bg-red-500/10 border-red-500/30"
+                        : "bg-white/[0.03] border-white/10 opacity-70"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          {job.queue_position && (
+                            <span className="text-[9px] font-mono px-1 rounded bg-white/15 text-white font-bold">
+                              #{job.queue_position}
+                            </span>
+                          )}
+                          <span className="text-xs font-semibold text-white truncate">
+                            {job.document_title}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-[#8E92A4] mt-0.5 flex items-center gap-2">
+                          {job.patient ? (
+                            <span>
+                              {job.patient.first_name} {job.patient.last_name} ({job.patient.medical_record_number})
+                            </span>
+                          ) : (
+                            <span>Ward Requisition</span>
+                          )}
+                          {job.staff?.display_name && (
+                            <>
+                              <span>·</span>
+                              <span>By: {job.staff.display_name}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 flex items-center gap-1">
+                        <span
+                          className={`text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                            isPrinting
+                              ? "bg-[#1ECCE6]/20 text-[#1ECCE6] border-[#1ECCE6]/40 animate-pulse"
+                              : isQueued
+                              ? "bg-[#E67F1E]/20 text-[#F4B476] border-[#E67F1E]/40"
+                              : isCompleted
+                              ? "bg-[#24A951]/20 text-[#82D99E] border-[#24A951]/40"
+                              : "bg-red-500/20 text-red-300 border-red-500/40"
+                          }`}
+                        >
+                          {job.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Metadata & Actions */}
+                    <div className="mt-2 pt-2 border-t border-white/5 flex items-center justify-between text-[9px] text-[#7A8095]">
+                      <div className="flex items-center gap-2 font-mono">
+                        <span>{job.copies} copy</span>
+                        <span>·</span>
+                        <span>{job.duplex ? "Duplex" : "Single"}</span>
+                        <span>·</span>
+                        <span>Priority P{job.priority}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {(isQueued || isPrinting) && (
+                          <button
+                            type="button"
+                            onClick={() => handleCancelPrint(job.id)}
+                            className="px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[9.5px] transition-colors cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                        {(isFailed || job.status === "cancelled") && (
+                          <button
+                            type="button"
+                            onClick={() => handleRetryPrint(job.id)}
+                            className="px-2 py-0.5 rounded bg-[#1ECCE6]/20 hover:bg-[#1ECCE6]/30 text-[#1ECCE6] text-[9.5px] transition-colors cursor-pointer"
+                          >
+                            Retry
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         ) : visibleTransmissions.length === 0 ? (
           <div className="py-8 text-center text-[#8E92A4] text-xs">
@@ -513,40 +760,59 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
         )}
       </div>
 
-      {/* Quick Dispatch Bar */}
-      <form onSubmit={handleSendDispatch} className="relative pt-2 border-t border-white/10 flex flex-col gap-2">
-        <div className="flex items-center justify-between text-[10.5px]">
-          <span className="text-[#8E92A4]">Transmit to:</span>
-          <select
-            value={selectedTargetFloor}
-            onChange={(e) => setSelectedTargetFloor(parseInt(e.target.value, 10))}
-            className="bg-white/10 border border-white/15 rounded-lg px-2 py-0.5 text-xs text-white outline-none cursor-pointer"
-          >
-            <option value={4} className="bg-[#242930] text-white">Floor 4 (Ward 4B)</option>
-            <option value={5} className="bg-[#242930] text-white">Floor 5 (Ward 5A)</option>
-            <option value={6} className="bg-[#242930] text-white">Floor 6 (Ward 6B)</option>
-            <option value={7} className="bg-[#242930] text-white">Floor 7 (Ward 7A)</option>
-            <option value={8} className="bg-[#242930] text-white">Floor 8 (Ward 8C)</option>
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={dispatchText}
-            onChange={(e) => setDispatchText(e.target.value)}
-            placeholder="Type voice dispatch or tell voice agent..."
-            className="flex-1 bg-white/10 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white placeholder-[#7A8095] outline-none focus:border-[#1ECCE6]/60 transition-colors"
-          />
+      {/* Footer Toolbar: Radio Dispatch or Print Actions */}
+      {activeTab === "printer" ? (
+        <div className="relative pt-2 border-t border-white/10 flex items-center justify-between gap-2">
           <button
-            type="submit"
-            disabled={isSending || !dispatchText.trim()}
-            className="px-3 py-1.5 rounded-xl bg-[#1ECCE6] hover:bg-[#1ECCE6]/90 disabled:opacity-40 text-black font-semibold text-xs tracking-wide transition-all shadow-[0_0_12px_rgba(30,204,230,0.3)] cursor-pointer shrink-0"
+            type="button"
+            onClick={fetchPrintQueue}
+            className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-[#C6CBD9] text-xs font-medium transition-colors cursor-pointer"
           >
-            {isSending ? "Sending..." : "Transmit"}
+            ↻ Refresh Queue
+          </button>
+          <button
+            type="button"
+            onClick={handleQuickTestPrint}
+            className="px-3 py-1.5 rounded-xl bg-[#1ECCE6] hover:bg-[#1ECCE6]/90 text-black font-semibold text-xs tracking-wide transition-all shadow-[0_0_12px_rgba(30,204,230,0.3)] cursor-pointer"
+          >
+            + Print STAT Requisition
           </button>
         </div>
-      </form>
+      ) : (
+        <form onSubmit={handleSendDispatch} className="relative pt-2 border-t border-white/10 flex flex-col gap-2">
+          <div className="flex items-center justify-between text-[10.5px]">
+            <span className="text-[#8E92A4]">Transmit to:</span>
+            <select
+              value={selectedTargetFloor}
+              onChange={(e) => setSelectedTargetFloor(parseInt(e.target.value, 10))}
+              className="bg-white/10 border border-white/15 rounded-lg px-2 py-0.5 text-xs text-white outline-none cursor-pointer"
+            >
+              <option value={4} className="bg-[#242930] text-white">Floor 4 (Ward 4B)</option>
+              <option value={5} className="bg-[#242930] text-white">Floor 5 (Ward 5A)</option>
+              <option value={6} className="bg-[#242930] text-white">Floor 6 (Ward 6B)</option>
+              <option value={7} className="bg-[#242930] text-white">Floor 7 (Ward 7A)</option>
+              <option value={8} className="bg-[#242930] text-white">Floor 8 (Ward 8C)</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={dispatchText}
+              onChange={(e) => setDispatchText(e.target.value)}
+              placeholder="Type voice dispatch or tell voice agent..."
+              className="flex-1 bg-white/10 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white placeholder-[#7A8095] outline-none focus:border-[#1ECCE6]/60 transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={isSending || !dispatchText.trim()}
+              className="px-3 py-1.5 rounded-xl bg-[#1ECCE6] hover:bg-[#1ECCE6]/90 disabled:opacity-40 text-black font-semibold text-xs tracking-wide transition-all shadow-[0_0_12px_rgba(30,204,230,0.3)] cursor-pointer shrink-0"
+            >
+              {isSending ? "Sending..." : "Transmit"}
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

@@ -200,6 +200,80 @@ export const WARDEN_VOICE_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'get_incoming_admissions',
+      description: 'Check incoming patients and staged admissions en-route to the ward. Returns ETA, patient condition, acuity, required bed, and pre-admission blockers.',
+      parameters: {
+        type: 'object',
+        properties: {
+          floor_number: {
+            type: 'integer',
+            description: 'Floor number to check. Defaults to 7.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_night_shift_memory',
+      description: 'Answer "What am I forgetting?" or "What did I promise to do?" by retrieving all active deferred promises, spoken follow-ups, and reminders for the night shift.',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: {
+            type: 'string',
+            enum: ['active', 'completed', 'all'],
+            description: "Filter status. Defaults to 'active'.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_deferred_reminder',
+      description: 'Remember an intention or deferred action for later (e.g. "Remind me to check Bed 12 in 30 minutes", "Don\'t let me forget to call radiology").',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'The promised action, check, or reminder text.',
+          },
+          category: {
+            type: 'string',
+            enum: ['bed_check', 'doctor_call', 'transport', 'equipment', 'medication', 'general'],
+            description: 'Category of the reminder.',
+          },
+          delay_minutes: {
+            type: 'integer',
+            description: 'Number of minutes from now to remind (e.g. 15, 30, 45, 60). Defaults to 30.',
+          },
+          bed_number: {
+            type: 'string',
+            description: "Optional bed number (e.g. 'Bed 12', 'Bed 8').",
+          },
+        },
+        required: ['title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_print_queue',
+      description: 'Check the status of the ward cloud printer queue and active document print jobs.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'query_supabase_table',
       description: 'General query tool to inspect any table in the Supabase hospital database.',
       parameters: {
@@ -563,6 +637,98 @@ export async function executeVoiceTool(name: string, args: Record<string, any>):
         bed: bedNum,
         floor,
         summary: `Autonomous call completed with ${patientName} in ${bedNum}. Logged 2 patient needs (breakthrough pain 4/10, warm blanket). Created follow-up task ${task ? task.id.slice(0, 8) : 'logged'} for nursing staff.`,
+      };
+    }
+
+    if (name === 'get_incoming_admissions') {
+      const { data: rows, error } = await admin
+        .from('system_events')
+        .select('metadata')
+        .eq('event_type', 'incoming_admission')
+        .order('timestamp', { ascending: false });
+
+      if (error) throw error;
+      const admissions = (rows || []).map((r: any) => r.metadata);
+      return {
+        count: admissions.length,
+        admissions: admissions.map((a: any) => ({
+          patient: a.patient_name,
+          diagnosis: a.diagnosis,
+          acuity: a.acuity,
+          eta: `in ${a.eta_minutes || 20} minutes`,
+          staged_bed: a.staged_bed_number,
+          blockers: a.blockers,
+        })),
+      };
+    }
+
+    if (name === 'get_night_shift_memory') {
+      const { data: rows, error } = await admin
+        .from('system_events')
+        .select('id, metadata')
+        .eq('event_type', 'deferred_reminder')
+        .order('timestamp', { ascending: false });
+
+      if (error) throw error;
+      const reminders = (rows || []).map((r: any) => ({
+        id: r.id,
+        ...(r.metadata || {}),
+      }));
+
+      const active = reminders.filter((r: any) => r.status === 'active');
+      return {
+        active_count: active.length,
+        promises: active.map((r: any) => `${r.title} (${r.category})`),
+        summary: active.length > 0
+          ? `You have ${active.length} deferred promise(s): ${active.map((r: any) => r.title).join('; ')}.`
+          : 'You have no deferred intentions or forgotten promises tonight.',
+      };
+    }
+
+    if (name === 'add_deferred_reminder') {
+      const delayMinutes = Number(args.delay_minutes || 30);
+      const remindAt = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
+
+      const { data, error } = await admin
+        .from('system_events')
+        .insert({
+          event_type: 'deferred_reminder',
+          entity_type: 'ward_memory',
+          entity_id: crypto.randomUUID(),
+          actor_type: 'staff',
+          timestamp: new Date().toISOString(),
+          metadata: {
+            title: args.title,
+            category: args.category || 'general',
+            bed_number: args.bed_number || null,
+            status: 'active',
+            remind_at: remindAt,
+            created_by: 'Voice Agent (Spoken Request)',
+            source: 'voice',
+          },
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return {
+        success: true,
+        message: `Saved reminder: "${args.title}". I will remind you in ${delayMinutes} minutes.`,
+      };
+    }
+
+    if (name === 'get_print_queue') {
+      const { data: jobs, error } = await admin
+        .from('print_jobs')
+        .select('id, document_title, document_type, status, queued_at')
+        .in('status', ['queued', 'processing', 'printing'])
+        .order('queued_at', { ascending: true });
+
+      if (error) throw error;
+      return {
+        active_jobs_count: jobs?.length || 0,
+        jobs: jobs || [],
+        printer_status: 'Ward 4B Central Laser is online and ready.',
       };
     }
 
