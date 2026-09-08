@@ -452,7 +452,7 @@ export function VoiceSettingsModal({
                   </div>
                   <input
                     type="password"
-                    placeholder="rime_api_key (comma-separated for rotation)"
+                    placeholder="rime_... (comma-separated for rotation)"
                     value={localConfig.apiKeys?.rime || ""}
                     onChange={(e) =>
                       setLocalConfig({

@@ -128,33 +128,35 @@ export async function POST(request: Request) {
         }
       }
 
-      // Fallback to Rime if available
-      const rimeApiKey = process.env.RIME_API_KEY || '';
-      const rimeRes = await fetch('https://users.rime.ai/v1/rime-tts', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${rimeApiKey}`,
-          'Content-Type': 'application/json',
-          Accept: 'audio/mp3',
-        },
-        body: JSON.stringify({
-          text: cleanText,
-          speaker: 'abbie',
-          modelId: 'mistv2',
-          speedAlpha: 1.0,
-        }),
-      });
-
-      if (rimeRes.ok) {
-        const audioBuffer = await rimeRes.arrayBuffer();
-        return new Response(audioBuffer, {
+      // Fallback to Rime if available in environment
+      const rimeApiKey = process.env.RIME_API_KEY;
+      if (rimeApiKey) {
+        const rimeRes = await fetch('https://users.rime.ai/v1/rime-tts', {
+          method: 'POST',
           headers: {
-            'Content-Type': 'audio/mpeg',
-            'Content-Length': audioBuffer.byteLength.toString(),
-            'Cache-Control': 'no-cache',
-            'X-TTS-Provider': 'rime-fallback',
+            Authorization: `Bearer ${rimeApiKey}`,
+            'Content-Type': 'application/json',
+            Accept: 'audio/mp3',
           },
+          body: JSON.stringify({
+            text: cleanText,
+            speaker: 'abbie',
+            modelId: 'mistv2',
+            speedAlpha: 1.0,
+          }),
         });
+
+        if (rimeRes.ok) {
+          const audioBuffer = await rimeRes.arrayBuffer();
+          return new Response(audioBuffer, {
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Content-Length': audioBuffer.byteLength.toString(),
+              'Cache-Control': 'no-cache',
+              'X-TTS-Provider': 'rime-fallback',
+            },
+          });
+        }
       }
 
       return NextResponse.json(
@@ -165,7 +167,7 @@ export async function POST(request: Request) {
 
     // 3. Rime AI TTS
     if (provider === 'rime') {
-      const raw = [body.apiKey, request.headers.get('x-rime-api-key'), process.env.RIME_API_KEY, ''].filter(Boolean).join(',');
+      const raw = [body.apiKey, request.headers.get('x-rime-api-key'), process.env.RIME_API_KEY].filter(Boolean).join(',');
       const keys = Array.from(new Set(parseKeys(raw)));
 
       for (const apiKey of keys) {
