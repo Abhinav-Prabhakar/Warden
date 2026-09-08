@@ -57,8 +57,10 @@ export async function GET(request: Request) {
 
     const bedIds = (rawBeds || []).map((b: any) => b.id);
 
-    // 2. Fetch active tasks
+    // 2. Fetch active tasks and their current owner. A bed is projected from
+    // several independent processes instead of collapsing them into one status.
     const tasksMap: Record<string, any[]> = {};
+    const taskOwnerMap: Record<string, any> = {};
     if (patientIds.length > 0) {
       const { data: tasks } = await admin
         .from('tasks')
@@ -70,6 +72,20 @@ export async function GET(request: Request) {
         if (!tasksMap[t.patient_id]) tasksMap[t.patient_id] = [];
         tasksMap[t.patient_id].push(t);
       });
+
+      const taskIds = (tasks || []).map((task: any) => task.id);
+      if (taskIds.length > 0) {
+        const { data: assignments } = await admin
+          .from('task_assignments')
+          .select('task_id, assigned_at, accepted_at, started_at, staff:staff!task_assignments_staff_id_fkey(id, first_name, last_name, role)')
+          .in('task_id', taskIds)
+          .is('declined_at', null)
+          .order('assigned_at', { ascending: false });
+
+        (assignments || []).forEach((assignment: any) => {
+          if (!taskOwnerMap[assignment.task_id]) taskOwnerMap[assignment.task_id] = assignment;
+        });
+      }
     }
 
     // 3. Fetch active cleaning jobs
@@ -86,7 +102,35 @@ export async function GET(request: Request) {
       });
     }
 
-    // 4. Fetch latest vitals for each patient
+    // 4. Fetch independent patient processes. These remain separate dimensions
+    // so, for example, an occupied bed can also be discharging and awaiting transport.
+    const dischargeMap: Record<string, any> = {};
+    const transportMap: Record<string, any> = {};
+    if (patientIds.length > 0) {
+      const [{ data: discharges }, { data: transports }] = await Promise.all([
+        admin
+          .from('discharge_plans')
+          .select('*')
+          .in('patient_id', patientIds)
+          .in('status', ['planning', 'ready', 'delayed'])
+          .order('planned_discharge_at', { ascending: true }),
+        admin
+          .from('transport_requests')
+          .select('*, assigned_staff:staff!transport_requests_assigned_staff_id_fkey(id, first_name, last_name, role)')
+          .in('patient_id', patientIds)
+          .in('status', ['requested', 'assigned', 'in_transit'])
+          .order('created_at', { ascending: false }),
+      ]);
+
+      (discharges || []).forEach((plan: any) => {
+        if (!dischargeMap[plan.patient_id]) dischargeMap[plan.patient_id] = plan;
+      });
+      (transports || []).forEach((transport: any) => {
+        if (!transportMap[transport.patient_id]) transportMap[transport.patient_id] = transport;
+      });
+    }
+
+    // 5. Fetch latest vitals for each patient
     const vitalsMap: Record<string, any> = {};
     if (patientIds.length > 0) {
       const { data: vitals } = await admin
@@ -108,6 +152,12 @@ export async function GET(request: Request) {
       const bedTasks = pat ? tasksMap[pat.id] || [] : [];
       const cleaning = cleaningMap[b.id];
       const vitals = pat ? vitalsMap[pat.id] : null;
+      const discharge = pat ? dischargeMap[pat.id] : null;
+      const transport = pat ? transportMap[pat.id] : null;
+      const ownedTask = bedTasks.find((task: any) => taskOwnerMap[task.id]);
+      const taskOwner = ownedTask ? taskOwnerMap[ownedTask.id]?.staff : null;
+      const transportOwner = transport?.assigned_staff;
+      const owner = transportOwner || taskOwner;
 
       const isCritical =
         pat?.acuity === 'critical' ||
@@ -137,6 +187,22 @@ export async function GET(request: Request) {
         ? 'BED READY'
         : 'DOING WELL';
 
+      const waitingCandidates = [
+        cleaning?.requested_at,
+        transport?.created_at,
+        discharge?.planned_discharge_at,
+        ...bedTasks.map((task: any) => task.created_at),
+      ].filter(Boolean).map((value) => new Date(value).getTime()).filter(Number.isFinite);
+      const waitingSince = waitingCandidates.length > 0
+        ? new Date(Math.min(...waitingCandidates)).toISOString()
+        : null;
+
+      const blockedReasons = [
+        b.status === 'blocked' ? 'Bed blocked' : null,
+        discharge?.status === 'delayed' ? discharge.notes || 'Discharge delayed' : null,
+        ...bedTasks.filter((task: any) => task.status === 'blocked' || task.status === 'overdue').map((task: any) => task.title),
+      ].filter(Boolean);
+
       return {
         id: b.id,
         bed_number: b.bed_number,
@@ -153,6 +219,25 @@ export async function GET(request: Request) {
         vitals,
         active_tasks: bedTasks,
         cleaning_job: cleaning || null,
+        operational: {
+          occupancy: pat ? 'occupied' : b.status === 'reserved' ? 'reserved' : 'vacant',
+          bedStatus: b.status,
+          processes: {
+            cleaning: cleaning ? { id: cleaning.id, status: cleaning.status, requestedAt: cleaning.requested_at } : null,
+            transport: transport ? { id: transport.id, status: transport.status, requestedAt: transport.created_at } : null,
+            discharge: discharge ? { id: discharge.id, status: discharge.status, plannedAt: discharge.planned_discharge_at } : null,
+            reservation: b.status === 'reserved' ? { status: 'reserved' } : null,
+          },
+          ownership: owner ? {
+            id: owner.id,
+            name: `${owner.first_name || ''} ${owner.last_name || ''}`.trim(),
+            role: owner.role,
+          } : null,
+          urgency: isCritical ? 'stat' : bedTasks.some((task: any) => ['stat', 'urgent'].includes(task.urgency)) ? 'urgent' : 'routine',
+          openTaskCount: bedTasks.length,
+          waitingSince,
+          blockedReasons,
+        },
       };
     });
 

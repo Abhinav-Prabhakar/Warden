@@ -25,7 +25,28 @@ interface BedOverlay {
   patientAgeGender: string;
   statusText: string;
   isCleaningJob?: boolean;
+  operational?: BedOperationalProjection;
 }
+
+type BedProcessKey = "cleaning" | "transport" | "discharge" | "reservation";
+
+interface BedOperationalProjection {
+  occupancy: "occupied" | "reserved" | "vacant";
+  bedStatus: string;
+  processes: Record<BedProcessKey, { id?: string; status: string; requestedAt?: string; plannedAt?: string } | null>;
+  ownership: { id: string; name: string; role?: string } | null;
+  urgency: "routine" | "urgent" | "stat";
+  openTaskCount: number;
+  waitingSince: string | null;
+  blockedReasons: string[];
+}
+
+const PROCESS_MARKERS: Record<BedProcessKey, { label: string; color: string }> = {
+  cleaning: { label: "C", color: "#F0B429" },
+  transport: { label: "T", color: "#1ECCE6" },
+  discharge: { label: "D", color: "#A78BFA" },
+  reservation: { label: "R", color: "#60A5FA" },
+};
 
 interface BedGeometry {
   slotId: string;
@@ -404,6 +425,7 @@ export default function WardenMainScreen() {
               patientAgeGender,
               statusText: b.statusText,
               isCleaningJob: b.isCleaningJob,
+              operational: b.operational,
             };
           });
           setBeds(mapped);
@@ -594,6 +616,10 @@ export default function WardenMainScreen() {
   const dischargeAt = dischargeLabel(drilldownData?.discharge_plan?.planned_discharge_at);
   const vitalsTime = clockLabel(latestVitals?.recorded_at);
   const cleaningElapsed = elapsedLabel(drilldownData?.cleaning_job?.started_at);
+  const bedOperations = selectedBed?.operational;
+  const bedWaiting = elapsedLabel(bedOperations?.waitingSince || undefined);
+  const activeBedProcesses = (Object.entries(bedOperations?.processes || {}) as [BedProcessKey, BedOperationalProjection["processes"][BedProcessKey]][])
+    .filter(([, process]) => Boolean(process));
 
   // Operational notice reflecting:
   // - RED: Danger & priority task
@@ -859,7 +885,22 @@ export default function WardenMainScreen() {
                     height: `${bed.heightPct}%`,
                   }}
                   title={`${bed.name} (${bed.color.toUpperCase()} - ${bed.statusText})`}
-                />
+                >
+                  <div className="absolute -right-[8px] -top-[8px] flex flex-col gap-[3px] pointer-events-none">
+                    {(Object.entries(bed.operational?.processes || {}) as [BedProcessKey, BedOperationalProjection["processes"][BedProcessKey]][])
+                      .filter(([, process]) => Boolean(process))
+                      .map(([key, process]) => (
+                        <span
+                          key={key}
+                          className="flex h-[12px] min-w-[12px] items-center justify-center rounded-full border border-black/30 px-[3px] text-[7px] font-bold text-[#0B0E14] shadow-lg"
+                          style={{ background: PROCESS_MARKERS[key].color, boxShadow: `0 0 8px ${PROCESS_MARKERS[key].color}80` }}
+                          title={`${key}: ${process?.status}`}
+                        >
+                          {PROCESS_MARKERS[key].label}
+                        </span>
+                      ))}
+                  </div>
+                </div>
               );
             })}
 
@@ -1229,6 +1270,29 @@ export default function WardenMainScreen() {
                             {openTasks > 0 && <span className="text-[#4E5364] mr-[6px]">·</span>}
                             Discharge planned {dischargeAt}
                           </span>
+                        )}
+                      </div>
+                    )}
+
+                    {bedOperations && (
+                      <div className="flex items-center gap-[5px] min-w-0 overflow-hidden" aria-label="Live bed operations">
+                        <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.05] px-[6px] py-[2px] text-[8px] font-semibold uppercase tracking-[0.1em] text-[#A6ACBE]">
+                          {bedOperations.occupancy}
+                        </span>
+                        {activeBedProcesses.map(([key, process]) => (
+                          <span
+                            key={key}
+                            className="shrink-0 rounded-full border px-[6px] py-[2px] text-[8px] font-semibold uppercase tracking-[0.08em]"
+                            style={{ color: PROCESS_MARKERS[key].color, borderColor: `${PROCESS_MARKERS[key].color}45`, background: `${PROCESS_MARKERS[key].color}12` }}
+                          >
+                            {key} · {process?.status.replaceAll("_", " ")}
+                          </span>
+                        ))}
+                        {bedOperations.ownership?.name && (
+                          <span className="truncate text-[8.5px] text-[#8E92A4]">Owner: {bedOperations.ownership.name}</span>
+                        )}
+                        {bedOperations.waitingSince && (
+                          <span className="ml-auto shrink-0 font-mono text-[8px] text-[#7A8095]">{bedWaiting} waiting</span>
                         )}
                       </div>
                     )}
