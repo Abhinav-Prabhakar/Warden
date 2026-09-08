@@ -42,6 +42,16 @@ interface BedOperationalProjection {
   blockedReasons: string[];
 }
 
+interface WardEventItem {
+  id: string;
+  type: string;
+  message: string;
+  occurredAt: string;
+  bedNumber: string | null;
+  owner: string | null;
+  source: "patient" | "task" | "system";
+}
+
 const PROCESS_MARKERS: Record<BedProcessKey, { label: string; color: string }> = {
   cleaning: { label: "C", color: "#F0B429" },
   transport: { label: "T", color: "#1ECCE6" },
@@ -354,6 +364,8 @@ export default function WardenMainScreen() {
   const [bedsError, setBedsError] = useState<string | null>(null);
   const [selectedBed, setSelectedBed] = useState<BedOverlay | null>(null);
   const [bedAction, setBedAction] = useState<{ kind: "idle" | "working" | "success" | "error"; message: string }>({ kind: "idle", message: "" });
+  const [wardEvents, setWardEvents] = useState<WardEventItem[]>([]);
+  const [changedBedName, setChangedBedName] = useState<string | null>(null);
 
   // Live Pharmacy items state from Supabase
   const [shelfItems, setShelfItems] = useState<ShelfItem[]>([]);
@@ -449,6 +461,25 @@ export default function WardenMainScreen() {
       })
       .finally(() => setBedsLoading(false));
   }, [currentFloor, wardRealtime.revision]);
+
+  useEffect(() => {
+    fetch('/api/ward/events?limit=6')
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Unable to load ward activity');
+        return result;
+      })
+      .then((result) => {
+        const nextEvents = Array.isArray(result.events) ? result.events : [];
+        setWardEvents(nextEvents);
+        const latestBed = nextEvents[0]?.bedNumber;
+        if (latestBed) {
+          setChangedBedName(`Bed ${latestBed}`);
+          window.setTimeout(() => setChangedBedName(null), 1800);
+        }
+      })
+      .catch((error) => console.error('Ward event stream unavailable:', error));
+  }, [wardRealtime.revision]);
 
   // 2. Fetch live pharmacy items from Supabase on mount
   useEffect(() => {
@@ -926,6 +957,8 @@ export default function WardenMainScreen() {
                   className={`absolute cursor-pointer transition-transform duration-200 rounded-[4px] z-10 ${glowClass} ${
                     isSelected
                       ? "scale-[1.02] ring-1 ring-white/20"
+                      : changedBedName === bed.name
+                      ? "scale-[1.06] ring-2 ring-[#1ECCE6]/80 animate-pulse"
                       : "hover:scale-[1.02]"
                   }`}
                   style={{
@@ -953,6 +986,27 @@ export default function WardenMainScreen() {
                 </div>
               );
             })}
+
+            {wardEvents.length > 0 && (
+              <aside className="absolute bottom-[26px] left-1/2 z-20 w-[330px] -translate-x-1/2 rounded-[14px] border border-white/[0.08] bg-[#11151D]/80 px-[12px] py-[9px] shadow-2xl backdrop-blur-xl pointer-events-none">
+                <div className="mb-[6px] flex items-center justify-between text-[8px] font-semibold uppercase tracking-[0.18em] text-[#697084]">
+                  <span>Live ward activity</span>
+                  <span className="flex items-center gap-[4px] text-[#1ECCE6]">
+                    <span className="h-[4px] w-[4px] rounded-full bg-[#1ECCE6] animate-pulse" /> now
+                  </span>
+                </div>
+                <div className="space-y-[5px]">
+                  {wardEvents.slice(0, 3).map((event) => (
+                    <div key={event.id} className="flex items-center gap-[7px] text-[9px] leading-tight">
+                      <span className="h-[5px] w-[5px] shrink-0 rounded-full" style={{ background: event.source === 'task' ? '#F0B429' : event.source === 'patient' ? '#E61E67' : '#1ECCE6' }} />
+                      <span className="min-w-0 flex-1 truncate text-[#BCC2D0]">{event.message}</span>
+                      {event.bedNumber && <span className="shrink-0 font-semibold text-[#DDE1EA]">Bed {event.bedNumber}</span>}
+                      <span className="shrink-0 font-mono text-[#697084]">{elapsedLabel(event.occurredAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              </aside>
+            )}
 
             {/* Bed 2 Dynamic Room Label in Top Room 3 */}
             {(() => {

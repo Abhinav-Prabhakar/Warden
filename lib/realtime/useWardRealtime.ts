@@ -19,6 +19,7 @@ const WARD_TABLES = [
 ] as const;
 
 export type RealtimeConnectionState = "connecting" | "live" | "degraded";
+export type WardRealtimeEvent = { table: string; eventType: string; occurredAt: string };
 
 /**
  * One ward-level subscription invalidates the server-computed ward projection.
@@ -28,13 +29,16 @@ export function useWardRealtime(currentFloor: number) {
   const [revision, setRevision] = useState(0);
   const [connectionState, setConnectionState] = useState<RealtimeConnectionState>("connecting");
   const [lastEventAt, setLastEventAt] = useState<string | null>(null);
+  const [latestEvent, setLatestEvent] = useState<WardRealtimeEvent | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase.channel(`warden-floor-${currentFloor}`);
-    const invalidate = () => {
-      setLastEventAt(new Date().toISOString());
+    const invalidate = (table: string, payload: { eventType: string }) => {
+      const occurredAt = new Date().toISOString();
+      setLastEventAt(occurredAt);
+      setLatestEvent({ table, eventType: payload.eventType, occurredAt });
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => setRevision((value) => value + 1), 120);
     };
@@ -43,7 +47,7 @@ export function useWardRealtime(currentFloor: number) {
       channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table },
-        invalidate,
+        (payload) => invalidate(table, payload),
       );
     }
 
@@ -62,5 +66,5 @@ export function useWardRealtime(currentFloor: number) {
     };
   }, [currentFloor]);
 
-  return { revision, connectionState, lastEventAt };
+  return { revision, connectionState, lastEventAt, latestEvent };
 }
