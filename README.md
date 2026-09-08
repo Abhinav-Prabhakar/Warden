@@ -77,7 +77,27 @@ Clicking any of the 11 beds populates the bottom-right glassmorphic card directl
 
 ### Frontend & API Layer (`app/`)
 - Built on Next.js 16 App Router with Turbopack.
-- REST endpoints under `/api/beds`, `/api/tasks`, `/api/ward`, `/api/voice/chat`, `/api/voice/tts`, `/api/voice/livekit`, `/api/print-queue`, `/api/simulation`.
+- REST endpoints under `/api/beds`, `/api/tasks`, `/api/ward`, `/api/voice/chat`, `/api/voice/tts`, `/api/voice/livekit`, `/api/print-queue`, `/api/simulation`, `/api/staff`, `/api/efficiency`, `/api/warden/radio`, `/api/warden/calls`.
+
+### Operational Dock Cards (Left Navigation Bar)
+1. **Radio Inter-Ward Broadcasts (Dish Icon):**
+   - Transmits audio/text dispatches to other ward coordinators across floors.
+   - Do Not Disturb (DND) toggle to temporarily block incoming live radio audio during emergency procedures; queued messages remain safely indexed for the voice agent to retrieve later.
+2. **Staff Directory (Fingerprint Icon):**
+   - Live roster of all nurses, physicians, and support staff on duty.
+   - Specialization, active workload badges, and contact actions with swipe-left dismissal.
+3. **Energy Efficiency Suite (Leaf Icon):**
+   - Live kWh consumption analytics for the active floor and hospital-wide benchmark.
+   - Automatic HVAC and lighting zone controls linked directly to live bed occupancy state.
+4. **Autonomous Inpatient Phone Call Assistant (Telephone Icon):**
+   - Voice agent autonomously calls patient room phones (`/api/warden/calls`) to assess comfort, pain, and needs.
+   - Live call session view with two-way conversation transcript.
+   - Real-time clinical note extraction (e.g. breakthrough pain, hydration, ambulation assist).
+   - Automatic closed-loop creation and dispatch of follow-up ward tasks into Supabase.
+
+### Multi-Key Round-Robin Rotation
+- Enter multiple API keys separated by commas in the Voice Settings Modal (`Key1, Key2, Key3`).
+- Automatic round-robin rotation balances rate limits and recovers automatically from per-key quota exhaustion across Groq and TTS providers.
 
 ### Backend Service Layer (`lib/services/`)
 - **`WardService`:** Central operational aggregator, temporal "What changed?" queries, and bed drilldown resolver.
