@@ -361,6 +361,7 @@ const FOOD_INVENTORY: FoodInventoryItem[] = [
 const AVAILABLE_FLOORS = [4, 5, 6, 7, 8];
 
 export default function WardenMainScreen() {
+  const [isLightMode, setIsLightMode] = useState(false);
   const [activeScreen, setActiveScreen] = useState<0 | 1 | 2>(0);
   const [currentFloor, setCurrentFloor] = useState<number>(7);
   const [isStaffOpen, setIsStaffOpen] = useState<boolean>(false);
@@ -434,6 +435,19 @@ export default function WardenMainScreen() {
   const [drilldown, setDrilldown] = useState<{ bedName: string; data: BedDrilldown } | null>(null);
   const [settledBed, setSettledBed] = useState<string | null>(null);
   const isLoadingDrilldown = Boolean(selectedBed && settledBed !== selectedBed.name);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem('warden-theme');
+    setIsLightMode(saved ? saved === 'light' : window.matchMedia('(prefers-color-scheme: light)').matches);
+  }, []);
+
+  const toggleTheme = () => {
+    setIsLightMode((current) => {
+      const next = !current;
+      window.localStorage.setItem('warden-theme', next ? 'light' : 'dark');
+      return next;
+    });
+  };
 
   // Modular Voice Agent Hook
   const {
@@ -877,7 +891,7 @@ export default function WardenMainScreen() {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className="relative w-screen h-screen bg-[#2E333A] overflow-hidden select-none cursor-grab active:cursor-grabbing"
+      className={`warden-theme relative w-screen h-screen overflow-hidden select-none cursor-grab active:cursor-grabbing ${isLightMode ? 'theme-light' : 'theme-dark'}`}
     >
       {/* =====================================================================
           TOP HEADER (Top Left Dots, Title, Subtitle) - Anchored to Viewport
@@ -911,6 +925,16 @@ export default function WardenMainScreen() {
 
         {/* Right Label with Quick Controls & Floor Chevrons */}
         <div className="flex items-center gap-2 text-[#8E92A4] text-[12px] font-medium tracking-[0.06em] pointer-events-auto">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={isLightMode ? 'Dim inspection lights' : 'Turn on inspection lights'}
+            aria-pressed={isLightMode}
+            className="theme-toggle flex h-[27px] w-[27px] items-center justify-center rounded-full border border-white/10 bg-white/5 text-[13px] transition-all hover:scale-105 hover:bg-white/10"
+            title={isLightMode ? 'Dim inspection lights' : 'Illuminate beds and workspaces'}
+          >
+            {isLightMode ? '◉' : '◌'}
+          </button>
           {activeScreen === 0 ? (
             <>
               {/* Incoming Admissions Pill */}
@@ -1001,7 +1025,7 @@ export default function WardenMainScreen() {
         <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
           <div className="relative h-full aspect-[2750/1536] max-w-none shrink-0">
             {/* Base 3D Ward Render */}
-            <div className="absolute inset-0 w-full h-full">
+            <div className="theme-scene absolute inset-0 w-full h-full">
               <Image
                 src="/ward-room.png"
                 alt="General Ward Floor Plan"
@@ -1238,6 +1262,7 @@ export default function WardenMainScreen() {
               isOpen={isMapOpen}
               onClose={() => setIsMapOpen(false)}
               currentFloor={currentFloor}
+              isLightMode={isLightMode}
             />
 
             {/* Incoming Admissions Staging Queue Glass Card (§20) */}
@@ -1698,7 +1723,7 @@ export default function WardenMainScreen() {
         <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
           <div className="relative h-full aspect-[2760/1840] max-w-none shrink-0">
             {/* Base 3D Shelf Render */}
-            <div className="absolute inset-0 w-full h-full">
+            <div className="theme-scene absolute inset-0 w-full h-full">
               <Image
                 src="/medicine-shelf-transparent.png"
                 alt="Pharmacy Medicine Shelf"
@@ -1755,7 +1780,7 @@ export default function WardenMainScreen() {
               </div>
             )}
 
-            <div className="absolute left-[8.5%] top-[16.5%] z-20 flex items-center gap-[8px] rounded-full border border-white/10 bg-[#11151D]/75 px-[11px] py-[6px] text-[10px] backdrop-blur-xl">
+            <div className="figma-glass-card absolute left-[8.5%] top-[16.5%] z-20 flex items-center gap-[8px] rounded-full border border-white/10 px-[11px] py-[6px] text-[10px] backdrop-blur-xl">
               {pharmacyContext ? (
                 <>
                   <span className="font-semibold text-white">{pharmacyContext.name}</span>
@@ -1787,7 +1812,7 @@ export default function WardenMainScreen() {
               })}
 
             {shelfItems.length > ITEMS_PER_SHELF_PAGE && (
-              <div className="absolute bottom-[5.8%] left-[34%] z-20 flex items-center gap-[8px] rounded-full border border-white/10 bg-[#11151D]/75 px-[8px] py-[5px] backdrop-blur-xl">
+              <div className="figma-glass-card absolute bottom-[5.8%] left-[34%] z-20 flex items-center gap-[8px] rounded-full border border-white/10 px-[8px] py-[5px] backdrop-blur-xl">
                 <button type="button" disabled={shelfPage === 0} onClick={() => setShelfPage((page) => Math.max(0, page - 1))} className="h-[22px] w-[22px] rounded-full bg-white/5 text-xs text-white disabled:opacity-25">‹</button>
                 <span className="min-w-[54px] text-center text-[8px] font-semibold uppercase tracking-[0.12em] text-[#8E92A4]">Shelf {shelfPage + 1}/{Math.ceil(shelfItems.length / ITEMS_PER_SHELF_PAGE)}</span>
                 <button type="button" disabled={shelfPage >= Math.ceil(shelfItems.length / ITEMS_PER_SHELF_PAGE) - 1} onClick={() => setShelfPage((page) => page + 1)} className="h-[22px] w-[22px] rounded-full bg-white/5 text-xs text-white disabled:opacity-25">›</button>
@@ -1977,7 +2002,7 @@ export default function WardenMainScreen() {
         <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
           <div className="relative h-full aspect-[1646/1504] max-w-none shrink-0 fridge-drop-shadow">
             {/* Base B&W / Grey Fridge Render */}
-            <div className="absolute inset-0 w-full h-full">
+            <div className="theme-scene absolute inset-0 w-full h-full">
               <Image
                 src="/fridge.png"
                 alt="Clinical Nutrition Fridge"
@@ -2008,7 +2033,7 @@ export default function WardenMainScreen() {
             </svg>
 
             {/* Coloured Overlay Image - revealed strictly where items are clipped */}
-            <div className="absolute inset-0 w-full h-full pointer-events-none">
+            <div className="theme-scene absolute inset-0 w-full h-full pointer-events-none">
               <Image
                 src="/fridge-coloured.png"
                 alt="Coloured Nutrition Items"

@@ -8,6 +8,7 @@ interface SmartwatchMapCardProps {
   isOpen: boolean;
   onClose: () => void;
   currentFloor?: number;
+  isLightMode?: boolean;
 }
 
 // 100% Local Self-Contained Medical Campus GeoJSON (No External API Keys or Tiles Required)
@@ -325,7 +326,7 @@ const HOSPITAL_CAMPUS_GEOJSON: GeoJSON.FeatureCollection = {
   ],
 };
 
-export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7 }: SmartwatchMapCardProps) {
+export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7, isLightMode = false }: SmartwatchMapCardProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
   const [heading, setHeading] = useState<number>(38);
@@ -381,7 +382,7 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7 }: Smartwa
           id: "map-background",
           type: "background",
           paint: {
-            "background-color": "#0B0E14",
+            "background-color": isLightMode ? "#17202A" : "#0B0E14",
           },
         },
         // Campus ground polygons
@@ -391,7 +392,7 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7 }: Smartwa
           source: "campus_parcels",
           filter: ["==", "type", "ground"],
           paint: {
-            "fill-color": "#11151F",
+            "fill-color": isLightMode ? "#273541" : "#11151F",
           },
         },
         // Healing garden & courtyard greens
@@ -401,8 +402,8 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7 }: Smartwa
           source: "campus_parcels",
           filter: ["!=", "type", "ground"],
           paint: {
-            "fill-color": "#0E211A",
-            "fill-outline-color": "#153328",
+            "fill-color": isLightMode ? "#1E4033" : "#0E211A",
+            "fill-outline-color": isLightMode ? "#3C735E" : "#153328",
           },
         },
         // Road casing / curbs
@@ -411,7 +412,7 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7 }: Smartwa
           type: "line",
           source: "campus_roads",
           paint: {
-            "line-color": "#1A202C",
+            "line-color": isLightMode ? "#445461" : "#1A202C",
             "line-width": 7,
           },
         },
@@ -421,7 +422,7 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7 }: Smartwa
           type: "line",
           source: "campus_roads",
           paint: {
-            "line-color": "#242D3C",
+            "line-color": isLightMode ? "#60717E" : "#242D3C",
             "line-width": 4,
           },
         },
@@ -431,7 +432,7 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7 }: Smartwa
           type: "line",
           source: "campus_roads",
           paint: {
-            "line-color": "#4A5568",
+            "line-color": isLightMode ? "#A5B5C1" : "#4A5568",
             "line-width": 1,
             "line-dasharray": [3, 3],
           },
@@ -476,7 +477,7 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7 }: Smartwa
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [isOpen]);
+  }, [isOpen, isLightMode]);
 
   if (!isOpen) return null;
 

@@ -19,7 +19,7 @@ export function MedicationAsset({ item, selected, matched, onSelect }: {
     <button
       type="button"
       onClick={(event) => { event.stopPropagation(); onSelect(); }}
-      className={`absolute z-10 transition-all duration-300 ${matched ? 'opacity-100 scale-105' : 'opacity-55 hover:opacity-100'} ${selected ? 'ring-1 ring-white/60' : ''}`}
+      className={`medication-asset absolute z-10 transition-all duration-300 ${matched ? 'opacity-100 scale-105' : 'opacity-55 hover:opacity-100'} ${selected ? 'ring-1 ring-white/60' : ''}`}
       style={{
         left: `${item.leftPct}%`, top: `${item.topPct}%`, width: `${item.widthPct}%`, height: `${item.heightPct}%`,
         borderRadius: shape === 'bottle' ? '9px 9px 5px 5px' : shape === 'container' ? '11px' : '4px',
