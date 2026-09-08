@@ -1,0 +1,8 @@
+{
+  "elapsedMs": 21017,
+  "firstResponse": "timeout",
+  "nextWorker": "00000000-0000-4000-8000-000000000003",
+  "status": "assigned",
+  "finalStatus": "failed",
+  "coordinatorAlertSaved": true
+}

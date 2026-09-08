@@ -1,0 +1,62 @@
+
+> warden@0.1.0 build
+> next build
+
+▲ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 61ms
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 856ms
+  Running TypeScript ...
+  Finished TypeScript in 2.3s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/24) ...
+  Generating static pages using 7 workers (6/24) 
+  Generating static pages using 7 workers (12/24) 
+  Generating static pages using 7 workers (18/24) 
+✓ Generating static pages using 7 workers (24/24) in 191ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/auth/login
+├ ƒ /api/auth/logout
+├ ƒ /api/auth/user
+├ ƒ /api/beds
+├ ƒ /api/beds/[id]
+├ ƒ /api/beds/[id]/blockers
+├ ƒ /api/print-queue
+├ ƒ /api/print-queue/[id]
+├ ƒ /api/simulation
+├ ƒ /api/tasks
+├ ƒ /api/tasks/[id]
+├ ƒ /api/tasks/[id]/assign
+├ ƒ /api/tasks/[id]/blockers
+├ ƒ /api/voice/action
+├ ƒ /api/voice/chat
+├ ƒ /api/voice/livekit
+├ ƒ /api/voice/state
+├ ƒ /api/voice/stt
+├ ƒ /api/voice/tts
+├ ƒ /api/ward/bottlenecks
+├ ƒ /api/ward/changes
+├ ƒ /api/ward/handoff
+├ ƒ /api/ward/next-actions
+├ ƒ /api/ward/state
+├ ƒ /api/warden/action
+└ ƒ /api/warden/orchestrate
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

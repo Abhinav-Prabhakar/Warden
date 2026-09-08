@@ -1,0 +1,121 @@
+[
+  {
+    "name": "OLD_BED_18",
+    "http": 409,
+    "body": {
+      "error": "STALE_OPERATION"
+    }
+  },
+  {
+    "name": "NEW_BED_21",
+    "http": 200,
+    "body": {
+      "task": {
+        "patientId": "10000000-0000-4000-8000-000000000021",
+        "bedId": "00000000-0000-4000-8000-000000000021",
+        "wardId": "00000000-0000-4000-8000-000000000007",
+        "originZone": "ward-7-a",
+        "destination": "Radiology",
+        "transportMode": "wheelchair",
+        "urgency": "routine",
+        "requestedBy": "00000000-0000-4000-8000-000000000001",
+        "status": "assigned",
+        "id": "bef5f970-05cd-4838-ab41-80cd67f1e7a4",
+        "createdAt": "2026-09-08T02:50:05.285Z",
+        "assignedStaffId": "00000000-0000-4000-8000-000000000002"
+      },
+      "revision": 2,
+      "text": "Simulation request saved. Bed 21 to Radiology by wheelchair: assigned (Porter Arjun). Awaiting simulated worker acknowledgement; no phone call was made. Any earlier dispatched request must be acknowledged separately."
+    }
+  },
+  {
+    "name": "REPOSITORY_CHECK",
+    "newTasks": 1,
+    "beds": [
+      "00000000-0000-4000-8000-000000000021"
+    ],
+    "staleDiscardEvents": 1
+  },
+  {
+    "name": "ACCEPT",
+    "http": 200,
+    "body": {
+      "task": {
+        "patientId": "10000000-0000-4000-8000-000000000021",
+        "bedId": "00000000-0000-4000-8000-000000000021",
+        "wardId": "00000000-0000-4000-8000-000000000007",
+        "originZone": "ward-7-a",
+        "destination": "Radiology",
+        "transportMode": "wheelchair",
+        "urgency": "routine",
+        "requestedBy": "00000000-0000-4000-8000-000000000001",
+        "status": "accepted",
+        "id": "bef5f970-05cd-4838-ab41-80cd67f1e7a4",
+        "createdAt": "2026-09-08T02:50:05.285Z",
+        "assignedStaffId": "00000000-0000-4000-8000-000000000002",
+        "acceptedAt": "2026-09-08T02:50:05.337Z"
+      },
+      "text": "Bed 21 to Radiology by wheelchair: accepted (Porter Arjun)."
+    }
+  },
+  {
+    "name": "CANCEL",
+    "http": 200,
+    "body": {
+      "task": {
+        "patientId": "10000000-0000-4000-8000-000000000021",
+        "bedId": "00000000-0000-4000-8000-000000000021",
+        "wardId": "00000000-0000-4000-8000-000000000007",
+        "originZone": "ward-7-a",
+        "destination": "Radiology",
+        "transportMode": "wheelchair",
+        "urgency": "routine",
+        "requestedBy": "00000000-0000-4000-8000-000000000001",
+        "status": "cancellation_requested",
+        "id": "bef5f970-05cd-4838-ab41-80cd67f1e7a4",
+        "createdAt": "2026-09-08T02:50:05.285Z",
+        "assignedStaffId": "00000000-0000-4000-8000-000000000002",
+        "acceptedAt": "2026-09-08T02:50:05.337Z"
+      },
+      "text": "Bed 21 to Radiology by wheelchair: cancellation requested (Porter Arjun)."
+    }
+  },
+  {
+    "name": "ACK_CANCEL",
+    "http": 200,
+    "body": {
+      "task": {
+        "patientId": "10000000-0000-4000-8000-000000000021",
+        "bedId": "00000000-0000-4000-8000-000000000021",
+        "wardId": "00000000-0000-4000-8000-000000000007",
+        "originZone": "ward-7-a",
+        "destination": "Radiology",
+        "transportMode": "wheelchair",
+        "urgency": "routine",
+        "requestedBy": "00000000-0000-4000-8000-000000000001",
+        "status": "cancelled",
+        "id": "bef5f970-05cd-4838-ab41-80cd67f1e7a4",
+        "createdAt": "2026-09-08T02:50:05.285Z",
+        "assignedStaffId": "00000000-0000-4000-8000-000000000002",
+        "acceptedAt": "2026-09-08T02:50:05.337Z",
+        "cancelledAt": "2026-09-08T02:50:05.400Z"
+      },
+      "text": "Bed 21 to Radiology by wheelchair: cancelled (Porter Arjun)."
+    }
+  },
+  {
+    "name": "RIME",
+    "http": 503,
+    "body": {
+      "error": "RIME_API_KEY is not configured. Task status remains available as text."
+    }
+  },
+  {
+    "name": "RESULT",
+    "passed": true,
+    "storage": "memory simulation",
+    "audibleInterruptionMs": null,
+    "warmRimeLatencyMs": null,
+    "coldRimeLatencyMs": null
+  }
+]

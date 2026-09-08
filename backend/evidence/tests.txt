@@ -1,0 +1,24 @@
+
+> warden-telephone-backend@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /Users/kr/Warden/backend
+
+ ✓ tests/audio-fence.test.mts (1 test) 3ms
+ ✓ tests/response-broker.test.ts (3 tests) 5ms
+ ✓ tests/local-coordination.test.ts (14 tests) 147ms
+{"level":30,"time":1788836572869,"pid":5870,"hostname":"Krs-MacBook-Pro.local","reqId":"req-1","req":{"method":"GET","url":"/health","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+ ✓ tests/api.test.ts (1 test) 110ms
+{"level":30,"time":1788836572875,"pid":5870,"hostname":"Krs-MacBook-Pro.local","reqId":"req-1","res":{"statusCode":200},"responseTime":4.808334000000059,"msg":"request completed"}
+{"level":30,"time":1788836572877,"pid":5870,"hostname":"Krs-MacBook-Pro.local","reqId":"req-2","req":{"method":"GET","url":"/api/wards/00000000-0000-4000-8000-000000000007/state","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788836572878,"pid":5870,"hostname":"Krs-MacBook-Pro.local","reqId":"req-2","res":{"statusCode":401},"responseTime":1.0711249999999382,"msg":"request completed"}
+{"level":30,"time":1788836572879,"pid":5870,"hostname":"Krs-MacBook-Pro.local","reqId":"req-3","req":{"method":"GET","url":"/api/wards/00000000-0000-4000-8000-000000000007/state","host":"localhost:80","remoteAddress":"127.0.0.1"},"msg":"incoming request"}
+{"level":30,"time":1788836572882,"pid":5870,"hostname":"Krs-MacBook-Pro.local","reqId":"req-3","res":{"statusCode":200},"responseTime":2.8331249999999955,"msg":"request completed"}
+ ✓ tests/transport-workflow.test.ts (10 tests) 1385ms
+
+ Test Files  5 passed (5)
+      Tests  29 passed (29)
+   Start at  08:32:52
+   Duration  1.96s (transform 313ms, setup 0ms, collect 694ms, tests 1.65s, environment 1ms, prepare 610ms)
+
