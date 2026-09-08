@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { VoiceConfig, DEFAULT_VOICE_CONFIG } from "@/lib/voice/types";
 import { OrbState } from "thinking-orbs";
+import { getRotatedApiKey } from "@/lib/voice/key-rotation";
 
 export function useVoiceAgent() {
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig>(() => {
@@ -38,6 +39,9 @@ export function useVoiceAgent() {
   // Audio & speech references
   const audioContextRef = useRef<AudioContext | null>(null);
   const recognitionRef = useRef<any>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const accumulatedSpeechRef = useRef<string>("");
   const currentAudioElementRef = useRef<HTMLAudioElement | null>(null);
@@ -137,17 +141,25 @@ export function useVoiceAgent() {
           return;
         }
 
-        const activeTTSKey =
-          voiceConfig.tts.provider === "fish_audio"
+        const rawTTSKey =
+          voiceConfig.tts.provider === "groq"
+            ? voiceConfig.apiKeys?.groq
+            : voiceConfig.tts.provider === "fish_audio"
             ? voiceConfig.apiKeys?.fishAudio
             : voiceConfig.tts.provider === "rime"
             ? voiceConfig.apiKeys?.rime
             : voiceConfig.apiKeys?.openai;
 
+        const activeTTSKey = getRotatedApiKey(
+          voiceConfig.tts.provider === "groq" ? "groq" : voiceConfig.tts.provider,
+          rawTTSKey
+        );
+
         const res = await fetch("/api/voice/tts", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...(voiceConfig.apiKeys?.groq ? { "x-groq-api-key": voiceConfig.apiKeys.groq } : {}),
             ...(voiceConfig.apiKeys?.fishAudio ? { "x-fish-audio-api-key": voiceConfig.apiKeys.fishAudio } : {}),
             ...(voiceConfig.apiKeys?.rime ? { "x-rime-api-key": voiceConfig.apiKeys.rime } : {}),
             ...(voiceConfig.apiKeys?.openai ? { "x-openai-api-key": voiceConfig.apiKeys.openai } : {}),
@@ -196,10 +208,15 @@ export function useVoiceAgent() {
       let sentenceBuffer = "";
 
       try {
-        const activeLLMKey =
+        const rawLLMKey =
           voiceConfig.llm.provider === "openai"
             ? voiceConfig.apiKeys?.openai
             : voiceConfig.apiKeys?.groq;
+
+        const activeLLMKey = getRotatedApiKey(
+          voiceConfig.llm.provider === "openai" ? "openai" : "groq",
+          rawLLMKey
+        );
 
         const response = await fetch("/api/voice/chat", {
           method: "POST",
@@ -333,6 +350,24 @@ export function useVoiceAgent() {
         accumulatedSpeechRef.current = spoken;
         setTranscript(spoken);
 
+        // Start media recorder if configured for Groq / OpenAI Whisper
+        if (voiceConfig.stt.provider !== "web_speech" && typeof navigator !== "undefined" && navigator.mediaDevices) {
+          if (!mediaStreamRef.current) {
+            navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+              mediaStreamRef.current = stream;
+              const rec = new MediaRecorder(stream);
+              rec.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+              };
+              mediaRecorderRef.current = rec;
+              rec.start(100);
+            }).catch((e) => console.warn("Mic stream error:", e));
+          } else if (mediaRecorderRef.current && mediaRecorderRef.current.state === "inactive") {
+            audioChunksRef.current = [];
+            mediaRecorderRef.current.start(100);
+          }
+        }
+
         // Orb reacts dynamically to incoming voice energy
         setOrbState("breathing");
         setOrbSpeed(1.5);
@@ -342,9 +377,66 @@ export function useVoiceAgent() {
           clearTimeout(silenceTimerRef.current);
         }
 
-        silenceTimerRef.current = setTimeout(() => {
+        silenceTimerRef.current = setTimeout(async () => {
           const textToProcess = accumulatedSpeechRef.current;
           accumulatedSpeechRef.current = "";
+
+          // If Groq or OpenAI Whisper is selected, transcribe recorded audio blob
+          if (
+            voiceConfig.stt.provider !== "web_speech" &&
+            mediaRecorderRef.current &&
+            mediaRecorderRef.current.state === "recording"
+          ) {
+            mediaRecorderRef.current.onstop = async () => {
+              const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+              audioChunksRef.current = [];
+
+              if (audioBlob.size > 0) {
+                try {
+                  const rawSTTKey =
+                    voiceConfig.stt.provider === "openai"
+                      ? voiceConfig.apiKeys?.openai
+                      : voiceConfig.apiKeys?.groq;
+                  const activeSTTKey = getRotatedApiKey(
+                    voiceConfig.stt.provider === "openai" ? "openai" : "groq",
+                    rawSTTKey
+                  );
+
+                  const formData = new FormData();
+                  formData.append("file", audioBlob, "speech.webm");
+                  formData.append("provider", voiceConfig.stt.provider);
+                  if (activeSTTKey) formData.append("apiKey", activeSTTKey);
+
+                  const res = await fetch("/api/voice/stt", {
+                    method: "POST",
+                    headers: {
+                      ...(voiceConfig.apiKeys?.groq ? { "x-groq-api-key": voiceConfig.apiKeys.groq } : {}),
+                      ...(voiceConfig.apiKeys?.openai ? { "x-openai-api-key": voiceConfig.apiKeys.openai } : {}),
+                    },
+                    body: formData,
+                  });
+
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data.text && data.text.trim()) {
+                      processUserSpeech(data.text.trim());
+                      return;
+                    }
+                  }
+                } catch (err) {
+                  console.warn("STT whisper error, falling back to Web Speech:", err);
+                }
+              }
+
+              // Fallback if transcription returned empty
+              if (textToProcess) {
+                processUserSpeech(textToProcess);
+              }
+            };
+            mediaRecorderRef.current.stop();
+            return;
+          }
+
           if (textToProcess) {
             processUserSpeech(textToProcess);
           }

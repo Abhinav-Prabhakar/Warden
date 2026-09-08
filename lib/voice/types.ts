@@ -1,6 +1,6 @@
 export type STTProvider = 'web_speech' | 'groq' | 'openai';
 export type LLMProvider = 'groq' | 'openai';
-export type TTSProvider = 'fish_audio' | 'rime' | 'openai' | 'browser_speech';
+export type TTSProvider = 'groq' | 'fish_audio' | 'rime' | 'openai' | 'browser_speech';
 
 export interface ApiKeysConfig {
   groq?: string;

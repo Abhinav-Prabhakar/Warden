@@ -25,24 +25,30 @@ export async function POST(request: Request) {
       { role: 'user', content: message },
     ];
 
-    const userApiKey =
-      body.apiKey ||
-      (provider === 'openai'
-        ? request.headers.get('x-openai-api-key')
-        : request.headers.get('x-groq-api-key'));
+    function parseKeys(raw?: string | null): string[] {
+      if (!raw || typeof raw !== 'string') return [];
+      return raw.split(',').map((k) => k.trim()).filter((k) => k.length > 0);
+    }
 
-    const apiKey =
-      userApiKey ||
-      (provider === 'openai'
+    const headerKey =
+      provider === 'openai'
+        ? request.headers.get('x-openai-api-key')
+        : request.headers.get('x-groq-api-key');
+
+    const envKey =
+      provider === 'openai'
         ? process.env.OPENAI_API_KEY
-        : process.env.GROQ_API_KEY);
+        : process.env.GROQ_API_KEY;
+
+    const raw = [body.apiKey, headerKey, envKey].filter(Boolean).join(',');
+    const keys = Array.from(new Set(parseKeys(raw)));
 
     const endpoint =
       provider === 'openai'
         ? 'https://api.openai.com/v1/chat/completions'
         : 'https://api.groq.com/openai/v1/chat/completions';
 
-    if (!apiKey) {
+    if (keys.length === 0) {
       // Graceful fallback response if keys are missing
       const mockResponse = `Warden operational assistant: acknowledged "${message}". Live telemetry and ward model active.`;
       if (stream) {
@@ -65,26 +71,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ text: mockResponse });
     }
 
-    // Call upstream LLM (Groq / OpenAI)
-    const upstreamRes = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: model || (provider === 'openai' ? 'gpt-4o-mini' : 'qwen/qwen3.8-27b'),
-        messages,
-        temperature: 0.4,
-        max_tokens: 150,
-        stream: !!stream,
-      }),
-    });
+    // Call upstream LLM (Groq / OpenAI) with key failover on 429 / 401
+    let upstreamRes: Response | null = null;
+    let lastError = 'LLM upstream call failed';
+    let lastStatus = 500;
 
-    if (!upstreamRes.ok) {
-      const errText = await upstreamRes.text();
-      console.error('LLM error:', upstreamRes.status, errText);
-      return NextResponse.json({ error: `LLM upstream error: ${errText}` }, { status: 502 });
+    for (const apiKey of keys) {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model || (provider === 'openai' ? 'gpt-4o-mini' : 'qwen/qwen3.8-27b'),
+            messages,
+            temperature: 0.4,
+            max_tokens: 150,
+            stream: !!stream,
+          }),
+        });
+
+        if (res.ok) {
+          upstreamRes = res;
+          break;
+        }
+
+        lastStatus = res.status;
+        lastError = await res.text();
+        console.warn(`LLM key attempt failed with status ${lastStatus}: ${lastError}`);
+
+        if (lastStatus !== 429 && lastStatus !== 401) {
+          break;
+        }
+      } catch (e: any) {
+        lastError = e.message;
+      }
+    }
+
+    if (!upstreamRes || !upstreamRes.ok) {
+      console.error('LLM error:', lastStatus, lastError);
+      return NextResponse.json({ error: `LLM upstream error: ${lastError}` }, { status: lastStatus });
     }
 
     if (!stream) {

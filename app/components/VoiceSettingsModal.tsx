@@ -10,6 +10,9 @@ interface VoiceSettingsModalProps {
   onSave: (newConfig: VoiceConfig) => void;
 }
 
+import { getLastUsedKeyInfo } from "@/lib/voice/key-rotation";
+
+const GROQ_SPEAKERS = ["troy", "autumn", "diana", "hannah", "austin"];
 const RIME_SPEAKERS = [
   "abbie",
   "allison",
@@ -122,7 +125,9 @@ export function VoiceSettingsModal({
             ))}
           </div>
           <p className="text-[10px] text-[#6D7282]">
-            Listens continuously until a natural pause/silence is detected.
+            {localConfig.stt.provider === "groq"
+              ? "Groq whisper-large-v3-turbo engine with continuous pause/silence detection."
+              : "Listens continuously until a natural pause/silence is detected."}
           </p>
         </div>
 
@@ -180,8 +185,9 @@ export function VoiceSettingsModal({
           <label className="text-[11.5px] font-medium tracking-[0.04em] uppercase text-[#8E92A4]">
             Text-to-Speech (TTS) Engine
           </label>
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-5 gap-1.5">
             {[
+              { id: "groq", label: "Groq Orpheus" },
               { id: "fish_audio", label: "Fish Audio" },
               { id: "rime", label: "Rime AI" },
               { id: "openai", label: "OpenAI" },
@@ -196,11 +202,20 @@ export function VoiceSettingsModal({
                     tts: {
                       ...localConfig.tts,
                       provider: tts.id as TTSProvider,
-                      modelId: tts.id === "fish_audio" ? "s2.1-pro-free" : localConfig.tts.modelId,
+                      modelId:
+                        tts.id === "groq"
+                          ? "canopylabs/orpheus-v1-english"
+                          : tts.id === "fish_audio"
+                          ? "s2.1-pro-free"
+                          : localConfig.tts.modelId,
+                      speaker:
+                        tts.id === "groq"
+                          ? (GROQ_SPEAKERS.includes(localConfig.tts.speaker) ? localConfig.tts.speaker : "troy")
+                          : localConfig.tts.speaker,
                     },
                   })
                 }
-                className={`py-2 px-1.5 rounded-[10px] text-[11px] font-medium transition-all text-center border ${
+                className={`py-2 px-1 rounded-[10px] text-[10.5px] font-medium transition-all text-center border ${
                   localConfig.tts.provider === tts.id
                     ? "bg-white/15 border-white/40 text-white shadow-sm"
                     : "bg-white/[0.03] border-white/5 text-[#8E92A4] hover:bg-white/[0.08]"
@@ -210,6 +225,50 @@ export function VoiceSettingsModal({
               </button>
             ))}
           </div>
+
+          {localConfig.tts.provider === "groq" && (
+            <div className="flex flex-col gap-2 mt-1 bg-white/[0.02] p-2.5 rounded-[10px] border border-white/5">
+              <div className="flex items-center justify-between text-[11px] text-[#8E92A4]">
+                <span>Model</span>
+                <span className="font-mono text-[10px] text-[#1ECCE6] bg-[#1ECCE6]/10 px-2 py-0.5 rounded border border-[#1ECCE6]/20">
+                  canopylabs/orpheus-v1-english
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-[#8E92A4]">
+                <span>Voice Speaker</span>
+                <select
+                  value={localConfig.tts.speaker || "troy"}
+                  onChange={(e) =>
+                    setLocalConfig({
+                      ...localConfig,
+                      tts: { ...localConfig.tts, speaker: e.target.value },
+                    })
+                  }
+                  className="bg-[#1A1E26] border border-white/15 rounded-md px-2 py-0.5 text-white text-[11.5px] outline-none capitalize"
+                >
+                  {GROQ_SPEAKERS.map((spk) => (
+                    <option key={spk} value={spk}>
+                      {spk}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-[#8E92A4]">
+                <span>Chunk Stream Synthesis</span>
+                <input
+                  type="checkbox"
+                  checked={localConfig.tts.streamSSE}
+                  onChange={(e) =>
+                    setLocalConfig({
+                      ...localConfig,
+                      tts: { ...localConfig.tts, streamSSE: e.target.checked },
+                    })
+                  }
+                  className="accent-[#1ECCE6] cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
 
           {localConfig.tts.provider === "fish_audio" && (
             <div className="flex flex-col gap-2 mt-1 bg-white/[0.02] p-2.5 rounded-[10px] border border-white/5">
@@ -275,88 +334,140 @@ export function VoiceSettingsModal({
           )}
         </div>
 
-        {/* API Keys Configuration Section (Saved to LocalStorage) */}
+        {/* API Keys Configuration Section (Saved to LocalStorage with Round-Robin Rotation) */}
         <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
           <div className="flex items-center justify-between">
             <label className="text-[11.5px] font-medium tracking-[0.04em] uppercase text-[#8E92A4]">
               API Keys & Credentials
             </label>
             <span className="text-[10px] text-[#1ECCE6] font-mono bg-[#1ECCE6]/10 px-1.5 py-0.5 rounded border border-[#1ECCE6]/20">
-              LocalStorage
+              LocalStorage · Comma-Separated Rotation
             </span>
           </div>
 
-          <div className="flex flex-col gap-2.5 max-h-[160px] overflow-y-auto pr-1">
-            {/* Fish Audio API Key */}
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-[#C1C6D7] font-medium">Fish Audio API Key</span>
-              <input
-                type="password"
-                placeholder="s2.1-pro-free / custom key (optional)"
-                value={localConfig.apiKeys?.fishAudio || ""}
-                onChange={(e) =>
-                  setLocalConfig({
-                    ...localConfig,
-                    apiKeys: { ...localConfig.apiKeys, fishAudio: e.target.value },
-                  })
-                }
-                className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
-              />
-            </div>
+          <div className="flex flex-col gap-2.5 max-h-[175px] overflow-y-auto pr-1">
+            {/* Groq API Key (Multi-key round robin) */}
+            {(() => {
+              const info = getLastUsedKeyInfo("groq", localConfig.apiKeys?.groq);
+              return (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-[#C1C6D7] font-medium">
+                      Groq API Keys (Qwen, Whisper, Orpheus)
+                    </span>
+                    {info.total > 1 ? (
+                      <span className="text-[9.5px] text-[#1ECCE6] font-mono bg-[#1ECCE6]/10 px-1.5 py-0.2 rounded border border-[#1ECCE6]/20">
+                        🔄 {info.total} keys · Next: #{info.currentIndex + 1} ({info.activeKeyPreview})
+                      </span>
+                    ) : info.total === 1 ? (
+                      <span className="text-[9.5px] text-[#1EE639] font-mono">1 key active</span>
+                    ) : null}
+                  </div>
+                  <input
+                    type="password"
+                    placeholder="gsk_key1, gsk_key2, gsk_key3 (round-robin rotated)"
+                    value={localConfig.apiKeys?.groq || ""}
+                    onChange={(e) =>
+                      setLocalConfig({
+                        ...localConfig,
+                        apiKeys: { ...localConfig.apiKeys, groq: e.target.value },
+                      })
+                    }
+                    className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
+                  />
+                </div>
+              );
+            })()}
 
-            {/* Groq API Key */}
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-[#C1C6D7] font-medium">Groq API Key (LLM / Whisper)</span>
-              <input
-                type="password"
-                placeholder="gsk_..."
-                value={localConfig.apiKeys?.groq || ""}
-                onChange={(e) =>
-                  setLocalConfig({
-                    ...localConfig,
-                    apiKeys: { ...localConfig.apiKeys, groq: e.target.value },
-                  })
-                }
-                className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
-              />
-            </div>
+            {/* Fish Audio API Key */}
+            {(() => {
+              const info = getLastUsedKeyInfo("fish_audio", localConfig.apiKeys?.fishAudio);
+              return (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-[#C1C6D7] font-medium">Fish Audio API Key(s)</span>
+                    {info.total > 1 && (
+                      <span className="text-[9.5px] text-[#1ECCE6] font-mono bg-[#1ECCE6]/10 px-1.5 py-0.2 rounded border border-[#1ECCE6]/20">
+                        🔄 {info.total} keys · Next: #{info.currentIndex + 1}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="password"
+                    placeholder="s2.1-pro-free / custom key (optional, comma-separated)"
+                    value={localConfig.apiKeys?.fishAudio || ""}
+                    onChange={(e) =>
+                      setLocalConfig({
+                        ...localConfig,
+                        apiKeys: { ...localConfig.apiKeys, fishAudio: e.target.value },
+                      })
+                    }
+                    className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
+                  />
+                </div>
+              );
+            })()}
 
             {/* OpenAI API Key */}
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-[#C1C6D7] font-medium">OpenAI API Key</span>
-              <input
-                type="password"
-                placeholder="sk-..."
-                value={localConfig.apiKeys?.openai || ""}
-                onChange={(e) =>
-                  setLocalConfig({
-                    ...localConfig,
-                    apiKeys: { ...localConfig.apiKeys, openai: e.target.value },
-                  })
-                }
-                className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
-              />
-            </div>
+            {(() => {
+              const info = getLastUsedKeyInfo("openai", localConfig.apiKeys?.openai);
+              return (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-[#C1C6D7] font-medium">OpenAI API Key(s)</span>
+                    {info.total > 1 && (
+                      <span className="text-[9.5px] text-[#1ECCE6] font-mono bg-[#1ECCE6]/10 px-1.5 py-0.2 rounded border border-[#1ECCE6]/20">
+                        🔄 {info.total} keys · Next: #{info.currentIndex + 1}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="password"
+                    placeholder="sk-key1, sk-key2 (comma-separated for rotation)"
+                    value={localConfig.apiKeys?.openai || ""}
+                    onChange={(e) =>
+                      setLocalConfig({
+                        ...localConfig,
+                        apiKeys: { ...localConfig.apiKeys, openai: e.target.value },
+                      })
+                    }
+                    className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
+                  />
+                </div>
+              );
+            })()}
 
             {/* Rime AI API Key */}
-            <div className="flex flex-col gap-1">
-              <span className="text-[11px] text-[#C1C6D7] font-medium">Rime AI API Key</span>
-              <input
-                type="password"
-                placeholder="rime_api_key or custom"
-                value={localConfig.apiKeys?.rime || ""}
-                onChange={(e) =>
-                  setLocalConfig({
-                    ...localConfig,
-                    apiKeys: { ...localConfig.apiKeys, rime: e.target.value },
-                  })
-                }
-                className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
-              />
-            </div>
+            {(() => {
+              const info = getLastUsedKeyInfo("rime", localConfig.apiKeys?.rime);
+              return (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-[#C1C6D7] font-medium">Rime AI API Key(s)</span>
+                    {info.total > 1 && (
+                      <span className="text-[9.5px] text-[#1ECCE6] font-mono bg-[#1ECCE6]/10 px-1.5 py-0.2 rounded border border-[#1ECCE6]/20">
+                        🔄 {info.total} keys · Next: #{info.currentIndex + 1}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="password"
+                    placeholder="rime_api_key (comma-separated for rotation)"
+                    value={localConfig.apiKeys?.rime || ""}
+                    onChange={(e) =>
+                      setLocalConfig({
+                        ...localConfig,
+                        apiKeys: { ...localConfig.apiKeys, rime: e.target.value },
+                      })
+                    }
+                    className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
+                  />
+                </div>
+              );
+            })()}
           </div>
           <p className="text-[10px] text-[#6D7282]">
-            Stored locally in your browser. No .env configuration required.
+            Separate multiple keys with commas. Warden round-robin rotates across keys on each call and automatically falls back on rate limits.
           </p>
         </div>
 
