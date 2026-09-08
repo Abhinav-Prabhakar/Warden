@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { ThinkingOrb } from "thinking-orbs";
 import { useVoiceAgent } from "@/lib/voice/useVoiceAgent";
+import { useWardRealtime } from "@/lib/realtime/useWardRealtime";
 import { VoiceSettingsModal } from "@/app/components/VoiceSettingsModal";
 import { StaffDirectoryCard } from "@/app/components/StaffDirectoryCard";
 import { SatelliteRadioCard } from "@/app/components/SatelliteRadioCard";
@@ -323,6 +324,7 @@ export default function WardenMainScreen() {
   const [isPhoneOpen, setIsPhoneOpen] = useState<boolean>(false);
   const [isMemoryOpen, setIsMemoryOpen] = useState<boolean>(false);
   const [isAdmissionsOpen, setIsAdmissionsOpen] = useState<boolean>(false);
+  const wardRealtime = useWardRealtime(currentFloor);
 
   // Live Beds state from Supabase
   const [beds, setBeds] = useState<BedOverlay[]>([]);
@@ -421,7 +423,7 @@ export default function WardenMainScreen() {
         setBedsError("Live database connection unavailable for beds");
       })
       .finally(() => setBedsLoading(false));
-  }, [currentFloor]);
+  }, [currentFloor, wardRealtime.revision]);
 
   // 2. Fetch live pharmacy items from Supabase on mount
   useEffect(() => {
@@ -462,7 +464,7 @@ export default function WardenMainScreen() {
       })
       .catch((err) => console.warn("Failed to fetch bed drilldown", err))
       .finally(() => setSettledBed(selectedBed.name));
-  }, [selectedBed, currentFloor]);
+  }, [selectedBed, currentFloor, wardRealtime.revision]);
 
   // Keyboard navigation between screens (Arrow keys)
   useEffect(() => {
@@ -744,6 +746,31 @@ export default function WardenMainScreen() {
                 </svg>
               </button>
               <span className="select-none min-w-[50px] text-center">Floor {currentFloor}</span>
+              <span
+                className={`hidden lg:inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${
+                  wardRealtime.connectionState === "live"
+                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+                    : wardRealtime.connectionState === "degraded"
+                    ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
+                    : "border-white/10 bg-white/5 text-[#8E92A4]"
+                }`}
+                title={
+                  wardRealtime.lastEventAt
+                    ? `Last ward event ${new Date(wardRealtime.lastEventAt).toLocaleTimeString()}`
+                    : "Waiting for the ward event stream"
+                }
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    wardRealtime.connectionState === "live"
+                      ? "bg-emerald-300"
+                      : wardRealtime.connectionState === "degraded"
+                      ? "bg-amber-300"
+                      : "bg-[#727889] animate-pulse"
+                  }`}
+                />
+                {wardRealtime.connectionState === "live" ? "Ward live" : wardRealtime.connectionState}
+              </span>
               <button
                 type="button"
                 onClick={() => {
@@ -1525,4 +1552,3 @@ export default function WardenMainScreen() {
     </main>
   );
 }
-
