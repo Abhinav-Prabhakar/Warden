@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildWardSystemPrompt } from '@/lib/voice/ward-prompt';
+import { WARDEN_VOICE_TOOLS, executeVoiceTool } from '@/lib/voice/tools';
 
 export const runtime = 'nodejs';
 
@@ -71,102 +72,177 @@ export async function POST(request: Request) {
       return NextResponse.json({ text: mockResponse });
     }
 
-    // Call upstream LLM (Groq / OpenAI) with key failover on 429 / 401
-    let upstreamRes: Response | null = null;
-    let lastError = 'LLM upstream call failed';
-    let lastStatus = 500;
+    // Helper to call upstream LLM with failover across key pool
+    async function callUpstreamLLM(payload: Record<string, any>): Promise<{ res: Response | null; lastStatus: number; lastError: string }> {
+      let upstreamRes: Response | null = null;
+      let lastError = 'LLM upstream call failed';
+      let lastStatus = 500;
 
-    for (const apiKey of keys) {
-      try {
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: model || (provider === 'openai' ? 'gpt-4o-mini' : 'qwen/qwen3.8-27b'),
-            messages,
-            temperature: 0.4,
-            max_tokens: 150,
-            stream: !!stream,
-          }),
-        });
+      for (const apiKey of keys) {
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+          });
 
-        if (res.ok) {
-          upstreamRes = res;
-          break;
+          if (res.ok) {
+            upstreamRes = res;
+            break;
+          }
+
+          lastStatus = res.status;
+          lastError = await res.text();
+          console.warn(`LLM key attempt failed (${lastStatus}): ${lastError}`);
+
+          if (lastStatus !== 429 && lastStatus !== 401) {
+            break;
+          }
+        } catch (e: any) {
+          lastError = e.message;
         }
-
-        lastStatus = res.status;
-        lastError = await res.text();
-        console.warn(`LLM key attempt failed with status ${lastStatus}: ${lastError}`);
-
-        if (lastStatus !== 429 && lastStatus !== 401) {
-          break;
-        }
-      } catch (e: any) {
-        lastError = e.message;
       }
+
+      return { res: upstreamRes, lastStatus, lastError };
     }
 
-    if (!upstreamRes || !upstreamRes.ok) {
-      console.error('LLM error:', lastStatus, lastError);
+    const selectedModel = model || (provider === 'openai' ? 'gpt-4o-mini' : 'qwen/qwen3.8-27b');
+
+    // 1. Initial reasoning step with Tool Calling enabled
+    const initialPayload: Record<string, any> = {
+      model: selectedModel,
+      messages,
+      temperature: 0.3,
+      max_tokens: 220,
+      tools: WARDEN_VOICE_TOOLS,
+      tool_choice: 'auto',
+      stream: false,
+    };
+
+    const { res: initialRes, lastStatus, lastError } = await callUpstreamLLM(initialPayload);
+
+    if (!initialRes || !initialRes.ok) {
+      console.error('LLM initial error:', lastStatus, lastError);
       return NextResponse.json({ error: `LLM upstream error: ${lastError}` }, { status: lastStatus });
     }
 
-    if (!stream) {
-      const json = await upstreamRes.json();
-      const text = json.choices?.[0]?.message?.content || '';
-      return NextResponse.json({ text });
-    }
+    const initialJson = await initialRes.json();
+    const choice = initialJson.choices?.[0];
+    const toolCalls = choice?.message?.tool_calls;
 
-    // Stream SSE events forward to client
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-    const reader = upstreamRes.body?.getReader();
+    // 2. If the LLM invoked tools to query Supabase
+    if (toolCalls && toolCalls.length > 0) {
+      messages.push(choice.message);
 
-    if (!reader) {
-      return NextResponse.json({ error: 'No response body from LLM stream' }, { status: 500 });
-    }
-
-    const readableStream = new ReadableStream({
-      async start(controller) {
-        let buffer = '';
+      for (const call of toolCalls) {
+        let args = {};
         try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+          args = JSON.parse(call.function.arguments || '{}');
+        } catch {}
 
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed || !trimmed.startsWith('data:')) continue;
-              if (trimmed === 'data: [DONE]') {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: '', done: true })}\n\n`));
-                continue;
-              }
-              try {
-                const parsed = JSON.parse(trimmed.slice(5).trim());
-                const delta = parsed.choices?.[0]?.delta?.content || '';
-                if (delta) {
-                  controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({ text: delta, done: false })}\n\n`)
-                  );
+        const toolResult = await executeVoiceTool(call.function.name, args);
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: JSON.stringify(toolResult),
+        });
+      }
+
+      // Final response step after tool execution
+      const finalPayload: Record<string, any> = {
+        model: selectedModel,
+        messages,
+        temperature: 0.3,
+        max_tokens: 180,
+        stream: !!stream,
+      };
+
+      const { res: finalRes, lastStatus: fStatus, lastError: fErr } = await callUpstreamLLM(finalPayload);
+      if (!finalRes || !finalRes.ok) {
+        return NextResponse.json({ error: `LLM final error: ${fErr}` }, { status: fStatus });
+      }
+
+      if (!stream) {
+        const finalJson = await finalRes.json();
+        const text = finalJson.choices?.[0]?.message?.content || '';
+        return NextResponse.json({ text });
+      }
+
+      // Stream SSE from final step
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+      const reader = finalRes.body?.getReader();
+      if (!reader) {
+        return NextResponse.json({ error: 'No response body from stream' }, { status: 500 });
+      }
+
+      const readableStream = new ReadableStream({
+        async start(controller) {
+          let buffer = '';
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || !trimmed.startsWith('data:')) continue;
+                if (trimmed === 'data: [DONE]') {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: '', done: true })}\n\n`));
+                  continue;
                 }
-              } catch (e) {
-                // Ignore parse errors on partial frames
+                try {
+                  const parsed = JSON.parse(trimmed.slice(5).trim());
+                  const delta = parsed.choices?.[0]?.delta?.content || '';
+                  if (delta) {
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({ text: delta, done: false })}\n\n`)
+                    );
+                  }
+                } catch {}
               }
             }
+          } catch (err) {
+            console.error('Stream reader error:', err);
+          } finally {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: '', done: true })}\n\n`));
+            controller.close();
           }
-        } catch (err: any) {
-          console.error('Stream processing error:', err);
-        } finally {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: '', done: true })}\n\n`));
-          controller.close();
+        },
+      });
+
+      return new Response(readableStream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+      });
+    }
+
+    // 3. No tools called — return direct response
+    const directText = choice?.message?.content || '';
+
+    if (!stream) {
+      return NextResponse.json({ text: directText });
+    }
+
+    // Emit direct response as fast SSE chunks for voice synthesis
+    const encoder = new TextEncoder();
+    const readableStream = new ReadableStream({
+      start(controller) {
+        const sentences = directText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [directText];
+        for (const s of sentences) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: s, done: false })}\n\n`));
         }
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: '', done: true })}\n\n`));
+        controller.close();
       },
     });
 

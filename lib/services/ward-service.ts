@@ -421,13 +421,13 @@ export class WardService {
   /**
    * Complete Bed-Level Drilldown
    */
-  static async getBedDrilldown(bedId: string) {
+  static async getBedDrilldown(bedId: string, floorNumber?: number) {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bedId);
     let query = this.adminClient
       .from('beds')
       .select(`
         *,
-        room:rooms (
+        room:rooms!inner (
           id,
           room_number,
           floor_number,
@@ -459,10 +459,12 @@ export class WardService {
       query = query.eq('id', bedId);
     } else {
       // Allow searching by "Bed 1", "bed-top-1", etc.
-      const normalizedName = bedId.replace(/^bed-(?:top|b\d+(?:-[a-z]+)?)-?/i, '').replace(/^bed-/i, 'Bed ');
       const cleanNum = bedId.match(/\d+/)?.[0];
       const targetName = cleanNum ? `Bed ${cleanNum}` : bedId;
       query = query.or(`bed_number.eq.${bedId},bed_number.eq.${targetName}`);
+      if (floorNumber) {
+        query = query.eq('room.floor_number', floorNumber);
+      }
     }
 
     const { data: bed, error } = await query.limit(1).maybeSingle();

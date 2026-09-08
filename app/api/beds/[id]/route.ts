@@ -8,7 +8,10 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const drilldown = await WardService.getBedDrilldown(id);
+    const { searchParams } = new URL(request.url);
+    const floorParam = searchParams.get('floor');
+    const floor = floorParam ? parseInt(floorParam, 10) : undefined;
+    const drilldown = await WardService.getBedDrilldown(id, floor);
     return NextResponse.json(drilldown);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
