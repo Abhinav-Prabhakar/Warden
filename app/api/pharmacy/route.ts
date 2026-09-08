@@ -16,73 +16,24 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Shelf item layout mapping to 3D shelf visual render
-    const shelfPositions: Record<string, { leftPct: number; topPct: number; widthPct: number; heightPct: number; colorType: 'cyan' | 'magenta' | 'orange' | 'green'; category: string; indications: string[]; isBottleShape?: boolean }> = {
-      'Cetirizine 10mg': {
-        leftPct: 19.63,
-        topPct: 35.89,
-        widthPct: 3.61,
-        heightPct: 8.5,
-        colorType: 'cyan',
-        category: 'Allergy Relief',
-        indications: [
-          'Relieves seasonal allergy symptoms',
-          'Fast acting non-drowsy formulation',
-          'Treats itchy eyes and runny nose',
-        ],
-      },
-      'Benadryl': {
-        leftPct: 37.3,
-        topPct: 51.56,
-        widthPct: 2.73,
-        heightPct: 8.5,
-        colorType: 'magenta',
-        category: 'Cough & Cold',
-        indications: [
-          'Loosens thick mucus, relieves chest congestion',
-          'Calms throat irritation, persistent coughs',
-          'Relieves runny nose, sneezing, watery eyes',
-        ],
-        isBottleShape: true,
-      },
-      'Ibuprofen 400mg': {
-        leftPct: 56.93,
-        topPct: 52.0,
-        widthPct: 4.3,
-        heightPct: 2.34,
-        colorType: 'orange',
-        category: 'Anti-Inflammatory',
-        indications: [
-          'Provides relief from acute pain and fever',
-          'Reduces joint inflammation & swelling',
-          'Prescribed post-op analgesic support',
-        ],
-      },
-      'Amoxicillin 500mg': {
-        leftPct: 11.82,
-        topPct: 81.3,
-        widthPct: 4.88,
-        heightPct: 7.76,
-        colorType: 'green',
-        category: 'Antibiotics',
-        indications: [
-          'Broad-spectrum bacterial infection control',
-          'Respiratory and urinary tract treatment',
-          'Completed course verification required',
-        ],
-      },
-    };
-
     const shelfItems = (meds || []).map((m: any) => {
-      const pos = shelfPositions[m.name] || {
-        leftPct: 25,
-        topPct: 40,
-        widthPct: 4,
-        heightPct: 6,
-        colorType: 'cyan' as const,
-        category: 'General Therapeutics',
-        indications: [`Active pharmaceutical ingredient: ${m.generic_name || m.name}`, `Dosage form: ${m.form || 'Tablet'}`, `Strength: ${m.strength || 'Standard'}`],
-      };
+      const form = String(m.form || 'tablet').toLowerCase();
+      const haystack = `${m.name} ${m.generic_name || ''}`.toLowerCase();
+      const packageType = form.includes('liquid') || form.includes('syrup') || form.includes('solution')
+        ? 'bottle'
+        : form.includes('capsule') || form.includes('tablet')
+        ? 'box'
+        : form.includes('strip') || form.includes('blister')
+        ? 'strip'
+        : 'container';
+      const category = /amoxic|cillin|antibiotic/.test(haystack) ? 'Antibiotics'
+        : /ibuprofen|paracetamol|acetaminophen|pain/.test(haystack) ? 'Pain & Inflammation'
+        : /cetirizine|diphenhydramine|benadryl|allerg/.test(haystack) ? 'Allergy & Respiratory'
+        : 'General Therapeutics';
+      const colorType = category === 'Antibiotics' ? 'green'
+        : category === 'Pain & Inflammation' ? 'orange'
+        : category === 'Allergy & Respiratory' ? 'magenta'
+        : 'cyan';
 
       return {
         id: m.id,
@@ -90,18 +41,14 @@ export async function GET() {
         genericName: m.generic_name,
         strength: m.strength,
         form: m.form,
-        category: pos.category,
-        indication: pos.indications,
-        colorType: pos.colorType,
-        leftPct: pos.leftPct,
-        topPct: pos.topPct,
-        widthPct: pos.widthPct,
-        heightPct: pos.heightPct,
-        isBottleShape: pos.isBottleShape,
+        category,
+        indication: [`Active ingredient: ${m.generic_name || m.name}`, `Dosage form: ${m.form || 'Tablet'}`, `Strength: ${m.strength || 'Standard'}`],
+        packageType,
+        colorType,
       };
     });
 
-    return NextResponse.json(shelfItems);
+    return NextResponse.json({ items: shelfItems });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
