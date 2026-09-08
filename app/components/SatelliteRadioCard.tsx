@@ -43,6 +43,19 @@ export interface PrintQueueItem {
   patient?: { first_name: string; last_name: string; medical_record_number: string };
 }
 
+export interface DeferredReminder {
+  id: string;
+  title: string;
+  category: "bed_check" | "doctor_call" | "transport" | "equipment" | "medication" | "general";
+  bed_number?: string;
+  status: "active" | "completed" | "dismissed";
+  remind_at: string;
+  created_at: string;
+  created_by: string;
+  source: "voice" | "ui";
+  due_in_minutes?: number;
+}
+
 interface SatelliteRadioCardProps {
   isOpen: boolean;
   onClose: () => void;
@@ -92,7 +105,7 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"transmissions" | "queued" | "printer" | "wardens">("transmissions");
+  const [activeTab, setActiveTab] = useState<"transmissions" | "queued" | "printer" | "memory" | "wardens">("transmissions");
   const [selectedTargetFloor, setSelectedTargetFloor] = useState<number>(8);
   const [dispatchText, setDispatchText] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -103,10 +116,72 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
   const [isPrinterLoading, setIsPrinterLoading] = useState(false);
   const [printNotice, setPrintNotice] = useState<string | null>(null);
 
+  // Night-Shift Memory State (§29, §34)
+  const [reminders, setReminders] = useState<DeferredReminder[]>([]);
+  const [memoryTab, setMemoryTab] = useState<"active" | "completed">("active");
+  const [newReminderTitle, setNewReminderTitle] = useState("");
+  const [newReminderCategory, setNewReminderCategory] = useState<DeferredReminder["category"]>("bed_check");
+  const [newReminderDelay, setNewReminderDelay] = useState<number>(30);
+  const [isAddingReminder, setIsAddingReminder] = useState(false);
+
   // Left swipe-to-close state
   const [dragOffset, setDragOffset] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
+
+  // Fetch Night Memory
+  const fetchReminders = () => {
+    fetch("/api/warden/memory")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.reminders) setReminders(data.reminders);
+      })
+      .catch((err) => console.error("Memory fetch error:", err));
+  };
+
+  const handleToggleMemory = async (id: string, currentStatus: string) => {
+    const nextStatus = currentStatus === "completed" ? "active" : "completed";
+    setReminders((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, status: nextStatus as any } : r))
+    );
+    try {
+      await fetch("/api/warden/memory", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: nextStatus }),
+      });
+      fetchReminders();
+    } catch (err) {
+      console.error("Failed to update reminder status:", err);
+    }
+  };
+
+  const handleAddReminder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newReminderTitle.trim() || isAddingReminder) return;
+    setIsAddingReminder(true);
+    try {
+      const res = await fetch("/api/warden/memory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newReminderTitle.trim(),
+          category: newReminderCategory,
+          delayMinutes: newReminderDelay,
+          created_by: `Floor ${currentFloor} Coordinator`,
+          source: "ui",
+        }),
+      });
+      if (res.ok) {
+        setNewReminderTitle("");
+        fetchReminders();
+      }
+    } catch (err) {
+      console.error("Failed to add memory reminder:", err);
+    } finally {
+      setIsAddingReminder(false);
+    }
+  };
 
   // Fetch live radio state from /api/warden/radio
   const fetchRadioData = () => {
@@ -208,9 +283,11 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
     setError(null);
     fetchRadioData();
     fetchPrintQueue();
+    fetchReminders();
     const interval = setInterval(() => {
       fetchRadioData();
       fetchPrintQueue();
+      fetchReminders();
     }, 10000);
     return () => clearInterval(interval);
   }, [isOpen, currentFloor]);
@@ -335,7 +412,7 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onClick={(e) => e.stopPropagation()}
-      className="absolute z-30 figma-glass-card rounded-[22px] p-5 w-[380px] max-w-[94vw] text-white flex flex-col gap-3.5 shadow-[0_20px_45px_rgba(0,0,0,0.65)] animate-in fade-in slide-in-from-left-6 duration-200"
+      className="absolute z-30 figma-glass-card bg-[#10141D]/90 rounded-[22px] p-5 w-[380px] max-w-[94vw] text-white flex flex-col gap-3.5 shadow-[0_20px_45px_rgba(0,0,0,0.85)] animate-in fade-in slide-in-from-left-6 duration-200"
       style={{
         left: "54px",
         bottom: "34px",
@@ -442,7 +519,7 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
       </div>
 
       {/* Tabs */}
-      <div className="relative flex items-center gap-1 bg-black/25 p-1 rounded-xl border border-white/5 text-[10.5px]">
+      <div className="relative flex items-center gap-1 bg-black/25 p-1 rounded-xl border border-white/5 text-[10px]">
         <button
           type="button"
           onClick={() => setActiveTab("transmissions")}
@@ -461,7 +538,7 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
         >
           <span>Queue</span>
           {queuedCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full bg-[#E67F1E] text-black text-[9px] font-bold">
+            <span className="px-1.5 py-0.2 rounded-full bg-[#E67F1E] text-black text-[8.5px] font-bold">
               {queuedCount}
             </span>
           )}
@@ -473,10 +550,27 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
             activeTab === "printer" ? "bg-white/15 text-white shadow-sm" : "text-[#8E92A4] hover:text-white"
           }`}
         >
-          <span>🖨️ Printer</span>
-          {printJobs.filter(j => j.status === 'queued' || j.status === 'printing').length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full bg-[#1ECCE6] text-black text-[9px] font-bold">
-              {printJobs.filter(j => j.status === 'queued' || j.status === 'printing').length}
+          <span>🖨️ Print</span>
+          {printJobs.filter((j) => j.status === "queued" || j.status === "printing").length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-[#1ECCE6] text-black text-[8.5px] font-bold">
+              {printJobs.filter((j) => j.status === "queued" || j.status === "printing").length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("memory");
+            fetchReminders();
+          }}
+          className={`flex-1 py-1 rounded-lg font-medium transition-all flex items-center justify-center gap-1 ${
+            activeTab === "memory" ? "bg-white/15 text-white shadow-sm" : "text-[#8E92A4] hover:text-white"
+          }`}
+        >
+          <span>🧠 Memory</span>
+          {reminders.filter((r) => r.status === "active").length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-[#A855F7] text-white text-[8.5px] font-bold">
+              {reminders.filter((r) => r.status === "active").length}
             </span>
           )}
         </button>
@@ -688,6 +782,118 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
               })
             )}
           </div>
+        ) : activeTab === "memory" ? (
+          /* Night-Shift Memory Tab (§29, §34) */
+          <div className="flex flex-col gap-2">
+            <div className="rounded-xl p-2 bg-purple-950/25 border border-purple-500/25 flex items-center justify-between text-[10px]">
+              <span className="text-purple-200">
+                Ask Warden: <strong className="text-white">&ldquo;What am I forgetting?&rdquo;</strong>
+              </span>
+              <span className="text-[8.5px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-purple-300 font-medium">
+                {reminders.filter((r) => r.status === "active").length} Active
+              </span>
+            </div>
+
+            {/* Subtab Switcher */}
+            <div className="flex items-center gap-1 bg-black/20 p-0.5 rounded-lg border border-white/5 text-[9.5px]">
+              <button
+                type="button"
+                onClick={() => setMemoryTab("active")}
+                className={`flex-1 py-1 rounded font-medium transition-all ${
+                  memoryTab === "active" ? "bg-white/15 text-white shadow-sm" : "text-[#8E92A4] hover:text-white"
+                }`}
+              >
+                Active Promises ({reminders.filter((r) => r.status === "active").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemoryTab("completed")}
+                className={`flex-1 py-1 rounded font-medium transition-all ${
+                  memoryTab === "completed" ? "bg-white/15 text-white shadow-sm" : "text-[#8E92A4] hover:text-white"
+                }`}
+              >
+                Completed ({reminders.filter((r) => r.status === "completed").length})
+              </button>
+            </div>
+
+            {/* Reminders List */}
+            {reminders.filter((r) => r.status === (memoryTab === "active" ? "active" : "completed")).length === 0 ? (
+              <div className="py-6 text-center text-[#8E92A4] text-xs">
+                {memoryTab === "active"
+                  ? "No active deferred promises. All night follow-ups clear."
+                  : "No completed memories yet."}
+              </div>
+            ) : (
+              reminders
+                .filter((r) => r.status === (memoryTab === "active" ? "active" : "completed"))
+                .map((r) => {
+                  const isCompleted = r.status === "completed";
+                  const isOverdue = (r.due_in_minutes ?? 0) < 0;
+
+                  return (
+                    <div
+                      key={r.id}
+                      className={`p-2 rounded-xl border transition-all flex items-start gap-2 ${
+                        isCompleted
+                          ? "bg-white/[0.02] border-white/5 opacity-50"
+                          : isOverdue
+                          ? "bg-red-950/20 border-red-500/30"
+                          : "bg-white/[0.04] border-white/10 hover:bg-white/[0.07]"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMemory(r.id, r.status)}
+                        className={`w-3.5 h-3.5 mt-0.5 rounded-full border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                          isCompleted
+                            ? "bg-purple-500 border-purple-400 text-white"
+                            : "border-white/30 hover:border-purple-400"
+                        }`}
+                        title={isCompleted ? "Mark active" : "Mark completed"}
+                      >
+                        {isCompleted && <span className="text-[8px]">✓</span>}
+                      </button>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <span
+                            className={`text-xs font-medium leading-snug truncate ${
+                              isCompleted ? "line-through text-white/50" : "text-white"
+                            }`}
+                          >
+                            {r.title}
+                          </span>
+                          <span
+                            className={`text-[8px] font-mono px-1 py-0.2 rounded shrink-0 ${
+                              isCompleted
+                                ? "bg-white/10 text-white/40"
+                                : isOverdue
+                                ? "bg-red-500/20 text-red-300 font-bold animate-pulse"
+                                : "bg-purple-500/20 text-purple-300 font-medium"
+                            }`}
+                          >
+                            {isCompleted
+                              ? "Done"
+                              : isOverdue
+                              ? `Overdue ${Math.abs(r.due_in_minutes || 0)}m`
+                              : `In ${r.due_in_minutes}m`}
+                          </span>
+                        </div>
+
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[8.5px] text-[#8E92A4]">
+                          <span className="capitalize px-1 rounded bg-white/10 text-[#C6CBD9]">
+                            {r.category.replace("_", " ")}
+                          </span>
+                          {r.bed_number && <span className="font-mono">{r.bed_number}</span>}
+                          <span>·</span>
+                          <span>via {r.source === "voice" ? "🎙️ Voice" : "💻 UI"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+            )}
+          </div>
         ) : visibleTransmissions.length === 0 ? (
           <div className="py-8 text-center text-[#8E92A4] text-xs">
             {activeTab === "queued" ? "No queued radio transmissions" : "No recent transmissions on this channel"}
@@ -778,6 +984,35 @@ export function SatelliteRadioCard({ isOpen, onClose, currentFloor = 7 }: Satell
             + Print STAT Requisition
           </button>
         </div>
+      ) : activeTab === "memory" ? (
+        <form onSubmit={handleAddReminder} className="relative pt-2 border-t border-white/10 flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5 text-[10px]">
+            <input
+              type="text"
+              value={newReminderTitle}
+              onChange={(e) => setNewReminderTitle(e.target.value)}
+              placeholder="Add reminder (e.g. Check Bed 3 glucose)..."
+              className="flex-1 bg-white/10 border border-white/15 rounded-xl px-2.5 py-1 text-xs text-white placeholder-[#7A8095] outline-none focus:border-purple-400/60 transition-colors"
+            />
+            <select
+              value={newReminderDelay}
+              onChange={(e) => setNewReminderDelay(Number(e.target.value))}
+              className="bg-white/10 border border-white/15 rounded-xl px-2 py-1 text-xs text-white outline-none cursor-pointer"
+            >
+              <option value={15} className="bg-[#242930] text-white">+15m</option>
+              <option value={30} className="bg-[#242930] text-white">+30m</option>
+              <option value={60} className="bg-[#242930] text-white">+1 hr</option>
+              <option value={120} className="bg-[#242930] text-white">+2 hrs</option>
+            </select>
+            <button
+              type="submit"
+              disabled={isAddingReminder || !newReminderTitle.trim()}
+              className="px-3 py-1 rounded-xl bg-purple-500 hover:bg-purple-600 disabled:opacity-40 text-white font-semibold text-xs tracking-wide transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)] cursor-pointer shrink-0"
+            >
+              {isAddingReminder ? "Adding..." : "+ Promise"}
+            </button>
+          </div>
+        </form>
       ) : (
         <form onSubmit={handleSendDispatch} className="relative pt-2 border-t border-white/10 flex flex-col gap-2">
           <div className="flex items-center justify-between text-[10.5px]">

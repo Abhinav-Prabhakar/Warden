@@ -649,14 +649,14 @@ export function useVoiceAgent() {
     };
   }, [voiceConfig.stt.language, voiceConfig.stt.silenceTimeoutMs, processUserSpeech]);
 
-  // Click & hold orb for 5 seconds to open settings modal
+  // Click & hold orb for 2.5 seconds to open settings modal
   const handleOrbMouseDown = () => {
     isHoldingRef.current = true;
     holdTimerRef.current = setTimeout(() => {
       if (isHoldingRef.current) {
         setIsSettingsOpen(true);
       }
-    }, 5000); // 5 seconds hold trigger
+    }, 2500); // 2.5 seconds hold trigger
   };
 
   const handleOrbMouseUp = () => {

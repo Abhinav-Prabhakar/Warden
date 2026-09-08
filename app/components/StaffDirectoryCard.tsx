@@ -183,7 +183,7 @@ export function StaffDirectoryCard({ isOpen, onClose }: StaffDirectoryCardProps)
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onClick={(e) => e.stopPropagation()}
-      className="absolute z-30 figma-glass-card rounded-[22px] p-5 w-[360px] max-w-[92vw] text-white flex flex-col gap-3.5 shadow-[0_20px_45px_rgba(0,0,0,0.65)] animate-in fade-in slide-in-from-left-6 duration-200"
+      className="absolute z-30 figma-glass-card bg-[#10141D]/90 rounded-[22px] p-5 w-[360px] max-w-[92vw] text-white flex flex-col gap-3.5 shadow-[0_20px_45px_rgba(0,0,0,0.85)] animate-in fade-in slide-in-from-left-6 duration-200"
       style={{
         left: "54px",
         bottom: "34px",

@@ -10,7 +10,7 @@ import { StaffDirectoryCard } from "@/app/components/StaffDirectoryCard";
 import { SatelliteRadioCard } from "@/app/components/SatelliteRadioCard";
 import { EnergyEfficiencyCard } from "@/app/components/EnergyEfficiencyCard";
 import { TelephoneCallAssistantCard } from "@/app/components/TelephoneCallAssistantCard";
-import { NightShiftMemoryCard } from "@/app/components/NightShiftMemoryCard";
+import { SmartwatchMapCard } from "@/app/components/SmartwatchMapCard";
 import { IncomingAdmissionsCard } from "@/app/components/IncomingAdmissionsCard";
 
 interface BedOverlay {
@@ -264,30 +264,7 @@ function NoticeIcon({ type, className }: { type: string; className?: string }) {
   );
 }
 
-/* Single-beat ECG morphology: baseline → P wave → QRS complex → T wave
-   (x in beat units, y offset from baseline; negative y is upward) */
-const ECG_BEAT: Array<[number, number]> = [
-  [0, 0], [8, 0],
-  [12, -1.5], [16, -3.2], [20, -1.5], [24, 0],
-  [32, 0],
-  [36, 1.6], [39, 1.6],
-  [42.5, -15], [45.5, 6.5], [48, 0],
-  [56, 0],
-  [61, -2], [65, -4.4], [69, -2], [73, 0],
-  [82, 0], [90, 0],
-];
 
-function buildEcgPath(beats: number, beatWidth: number, midY: number): string {
-  const points: string[] = [];
-  for (let b = 0; b < beats; b++) {
-    for (const [dx, dy] of ECG_BEAT) {
-      points.push(`${(b * beatWidth + dx).toFixed(1)},${(midY + dy).toFixed(1)}`);
-    }
-  }
-  return `M${points.join(" L")}`;
-}
-
-const ECG_PATH = buildEcgPath(6, 90, 21);
 
 function calcAge(dob?: string): number | null {
   if (!dob) return null;
@@ -345,6 +322,40 @@ interface ShelfItem {
   isBottleShape?: boolean;
 }
 
+export interface FoodInventoryItem {
+  id: string;
+  name: string;
+  category: string;
+  leftPct: number;
+  topPct: number;
+  widthPct: number;
+  heightPct: number;
+  calories: string;
+  protein: string;
+  carbs: string;
+  dietary: string[];
+  location: string;
+  stock: string;
+}
+
+const FOOD_INVENTORY: FoodInventoryItem[] = [
+  { id: "roma-tomatoes", name: "Roma Tomatoes", category: "Fresh Produce", leftPct: 27.34, topPct: 53.19, widthPct: 10.02, heightPct: 7.98, calories: "22 kcal", protein: "1.1g", carbs: "4.8g", dietary: ["Low Potassium", "Renal Approved", "Diabetic Safe"], location: "Shelf 4 · Crisper", stock: "18 units" },
+  { id: "cavendish-bananas", name: "Cavendish Bananas", category: "Fresh Fruit", leftPct: 40.1, topPct: 62.17, widthPct: 9.11, heightPct: 7.98, calories: "89 kcal", protein: "1.1g", carbs: "22.8g", dietary: ["High Potassium", "Energy Boost", "Soft Texture"], location: "Shelf 5 · Fruit Bin", stock: "24 units" },
+  { id: "pasteurized-whole-milk", name: "Pasteurized Whole Milk", category: "Dairy & Eggs", leftPct: 78.07, topPct: 15.29, widthPct: 12.15, heightPct: 12.63, calories: "149 kcal", protein: "8.0g", carbs: "12.0g", dietary: ["Calcium Rich", "Vitamin D Fortified"], location: "Right Door · Top Tier", stock: "6 bottles" },
+  { id: "fresh-garden-carrots", name: "Fresh Garden Carrots", category: "Fresh Produce", leftPct: 56.2, topPct: 54.52, widthPct: 9.42, heightPct: 6.98, calories: "41 kcal", protein: "0.9g", carbs: "9.6g", dietary: ["Vitamin A Rich", "Diabetic Safe"], location: "Shelf 4 · Center", stock: "14 units" },
+  { id: "sunkist-navel-oranges", name: "Sunkist Navel Oranges", category: "Fresh Fruit", leftPct: 51.03, topPct: 63.16, widthPct: 10.02, heightPct: 7.31, calories: "62 kcal", protein: "1.2g", carbs: "15.4g", dietary: ["High Vitamin C", "Hydrating"], location: "Shelf 5 · Citrus Bin", stock: "12 units" },
+  { id: "honeycrisp-red-apples", name: "Honeycrisp Red Apples", category: "Fresh Fruit", leftPct: 27.95, topPct: 63.16, widthPct: 10.33, heightPct: 7.31, calories: "95 kcal", protein: "0.5g", carbs: "25.0g", dietary: ["Fiber Rich", "Low Glycemic"], location: "Shelf 5 · Apple Bin", stock: "16 units" },
+  { id: "savoy-cabbage-greens", name: "Savoy Cabbage & Greens", category: "Fresh Produce", leftPct: 51.64, topPct: 75.8, widthPct: 18.83, heightPct: 9.64, calories: "25 kcal", protein: "1.3g", carbs: "5.8g", dietary: ["Vitamin K Rich", "Anti-Inflammatory"], location: "Crisper Drawer Right", stock: "8 heads" },
+  { id: "organic-russet-potatoes", name: "Organic Russet Potatoes", category: "Grains & Roots", leftPct: 28.55, topPct: 75.8, widthPct: 18.23, heightPct: 9.64, calories: "110 kcal", protein: "3.0g", carbs: "26.0g", dietary: ["High Starch", "Potassium Source"], location: "Crisper Drawer Left", stock: "22 units" },
+  { id: "cold-pressed-juices", name: "Cold-Pressed Juices", category: "Beverages", leftPct: 8.51, topPct: 66.49, widthPct: 12.76, heightPct: 14.63, calories: "110 kcal", protein: "1.0g", carbs: "26.0g", dietary: ["100% Juice", "No Added Sugar"], location: "Left Door · Lower Tier", stock: "10 bottles" },
+  { id: "artisanal-cheese-blocks", name: "Artisanal Cheese Blocks", category: "Dairy & Eggs", leftPct: 54.68, topPct: 33.24, widthPct: 13.67, heightPct: 5.32, calories: "115 kcal", protein: "7.0g", carbs: "0.4g", dietary: ["High Protein", "Gluten Free"], location: "Shelf 2 · Deli Tier", stock: "4 blocks" },
+  { id: "farm-fresh-grade-a-eggs", name: "Farm Fresh Grade A Eggs", category: "Dairy & Eggs", leftPct: 52.55, topPct: 22.27, widthPct: 17.31, heightPct: 6.65, calories: "72 kcal", protein: "6.3g", carbs: "0.4g", dietary: ["Complete Protein", "Choline Rich"], location: "Shelf 1 · Top Right", stock: "18 eggs" },
+  { id: "condiments-sauces", name: "Condiments & Sauces", category: "Condiments", leftPct: 8.81, topPct: 34.91, widthPct: 12.15, heightPct: 9.97, calories: "15 kcal", protein: "0.2g", carbs: "3.5g", dietary: ["Low Calorie", "Preserved"], location: "Left Door · Middle Tier", stock: "8 jars" },
+  { id: "sweet-bell-peppers", name: "Sweet Bell Peppers", category: "Fresh Produce", leftPct: 65.31, topPct: 54.52, widthPct: 5.16, heightPct: 6.65, calories: "31 kcal", protein: "1.0g", carbs: "6.0g", dietary: ["Vitamin C", "Low Sodium"], location: "Shelf 4 · Right", stock: "6 units" },
+  { id: "whole-wheat-loaf", name: "Whole Wheat Loaf", category: "Bakery", leftPct: 27.95, topPct: 39.89, widthPct: 9.72, heightPct: 10.64, calories: "80 kcal", protein: "4.0g", carbs: "15.0g", dietary: ["Whole Grain", "Dietary Fiber"], location: "Shelf 3 · Left", stock: "2 loaves" },
+  { id: "greek-yogurt-cups", name: "Greek Yogurt Cups", category: "Dairy & Eggs", leftPct: 77.76, topPct: 36.57, widthPct: 12.45, heightPct: 6.32, calories: "100 kcal", protein: "10.0g", carbs: "6.0g", dietary: ["Probiotic", "Calcium Rich"], location: "Right Door · Tier 2", stock: "8 cups" },
+];
+
 const AVAILABLE_FLOORS = [4, 5, 6, 7, 8];
 
 export default function WardenMainScreen() {
@@ -354,7 +365,7 @@ export default function WardenMainScreen() {
   const [isRadioOpen, setIsRadioOpen] = useState<boolean>(false);
   const [isEfficiencyOpen, setIsEfficiencyOpen] = useState<boolean>(false);
   const [isPhoneOpen, setIsPhoneOpen] = useState<boolean>(false);
-  const [isMemoryOpen, setIsMemoryOpen] = useState<boolean>(false);
+  const [isMapOpen, setIsMapOpen] = useState<boolean>(false);
   const [isAdmissionsOpen, setIsAdmissionsOpen] = useState<boolean>(false);
   const wardRealtime = useWardRealtime(currentFloor);
 
@@ -373,6 +384,10 @@ export default function WardenMainScreen() {
   const [shelfError, setShelfError] = useState<string | null>(null);
   const [selectedMed, setSelectedMed] = useState<ShelfItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Live Food & Nutrition Inventory state (Screen 3)
+  const [selectedFood, setSelectedFood] = useState<FoodInventoryItem | null>(FOOD_INVENTORY[0]);
+  const [foodSearchQuery, setFoodSearchQuery] = useState("");
 
   // Live Supabase bed drilldown state — keyed by bed name so stale
   // results from a previous selection are ignored while a new one loads
@@ -397,7 +412,6 @@ export default function WardenMainScreen() {
     handleOrbMouseUp,
     toggleVoiceSession,
     processUserSpeech,
-    triggerSelfInvalidationDemo,
     triggerProactiveCallout,
   } = useVoiceAgent();
 
@@ -643,6 +657,13 @@ export default function WardenMainScreen() {
   const bpWarn = (latestVitals?.systolic_bp && latestVitals.systolic_bp >= 140) ||
     (latestVitals?.diastolic_bp && latestVitals.diastolic_bp >= 90);
 
+  // Chronological real vitals from Supabase for clinical telemetry graph
+  const chronVitals = [...(drilldownData?.vitals || [])].sort(
+    (a, b) => new Date(a?.recorded_at || 0).getTime() - new Date(b?.recorded_at || 0).getTime()
+  );
+  const firstHr = chronVitals.length > 0 ? Number(chronVitals[0].heart_rate) || vitalsHR : vitalsHR;
+  const hrDelta = vitalsHR - firstHr;
+
   const openTasks = (drilldownData?.tasks || []).filter(
     (t) => !["done", "completed", "cancelled"].includes(t?.status ?? "")
   ).length;
@@ -654,6 +675,17 @@ export default function WardenMainScreen() {
   const bedWaiting = elapsedLabel(bedOperations?.waitingSince || undefined);
   const activeBedProcesses = (Object.entries(bedOperations?.processes || {}) as [BedProcessKey, BedOperationalProjection["processes"][BedProcessKey]][])
     .filter(([, process]) => Boolean(process));
+
+  // Food items that are active and revealed in full vibrant color on Screen 3
+  const activeColoredFoods = FOOD_INVENTORY.filter((item) => {
+    if (foodSearchQuery.trim()) {
+      return (
+        item.name.toLowerCase().includes(foodSearchQuery.toLowerCase()) ||
+        item.category.toLowerCase().includes(foodSearchQuery.toLowerCase())
+      );
+    }
+    return selectedFood?.id === item.id;
+  });
 
   // Operational notice reflecting:
   // - RED: Danger & priority task
@@ -773,7 +805,7 @@ export default function WardenMainScreen() {
 
         {/* Center Title */}
         <div className="text-[#8E92A4] text-[12px] font-medium tracking-[0.06em]">
-          {activeScreen === 0 ? "General Ward" : activeScreen === 1 ? "Pharmacy" : "Diagnostics"}
+          {activeScreen === 0 ? "General Ward" : activeScreen === 1 ? "Pharmacy" : "Food Inventory"}
         </div>
 
         {/* Right Label with Quick Controls & Floor Chevrons */}
@@ -785,7 +817,7 @@ export default function WardenMainScreen() {
                 type="button"
                 onClick={() => {
                   setIsAdmissionsOpen((prev) => !prev);
-                  setIsMemoryOpen(false);
+                  setIsMapOpen(false);
                   setIsRadioOpen(false);
                   setIsStaffOpen(false);
                   setIsEfficiencyOpen(false);
@@ -793,45 +825,12 @@ export default function WardenMainScreen() {
                 }}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all flex items-center gap-1.5 cursor-pointer ${
                   isAdmissionsOpen
-                    ? "bg-[#1ECCE6]/25 border-[#1ECCE6]/50 text-white shadow-[0_0_10px_rgba(30,204,230,0.3)]"
+                    ? "bg-[#1ECCE6]/20 border-[#1ECCE6]/40 text-white"
                     : "bg-white/5 border-white/10 hover:bg-white/10 text-[#C6CBD9]"
                 }`}
                 title="Incoming Admissions Staging Queue (§20)"
               >
                 <span>🚑 Admissions</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-[#1ECCE6] animate-pulse" />
-              </button>
-
-              {/* Night-Shift Memory Pill */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMemoryOpen((prev) => !prev);
-                  setIsAdmissionsOpen(false);
-                  setIsRadioOpen(false);
-                  setIsStaffOpen(false);
-                  setIsEfficiencyOpen(false);
-                  setIsPhoneOpen(false);
-                }}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all flex items-center gap-1.5 cursor-pointer ${
-                  isMemoryOpen
-                    ? "bg-purple-500/25 border-purple-400/50 text-white shadow-[0_0_10px_rgba(168,85,247,0.3)]"
-                    : "bg-white/5 border-white/10 hover:bg-white/10 text-[#C6CBD9]"
-                }`}
-                title="Night-Shift Memory & Deferred Tasks (§29, §34)"
-              >
-                <span>🧠 Night Memory</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-              </button>
-
-              {/* Self-Invalidation Test Pill */}
-              <button
-                type="button"
-                onClick={() => triggerSelfInvalidationDemo()}
-                className="px-2 py-1 rounded-full text-[10.5px] font-medium bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 text-amber-200 transition-all cursor-pointer hidden md:flex items-center gap-1"
-                title="Test Self-Invalidating Speech Mid-Stream (§4, §68 Rule 1 & 2)"
-              >
-                <span>⚡ Test Invalidation</span>
               </button>
 
               <div className="h-4 w-px bg-white/10 mx-0.5" />
@@ -1041,11 +1040,12 @@ export default function WardenMainScreen() {
                   setIsStaffOpen(false);
                   setIsEfficiencyOpen(false);
                   setIsPhoneOpen(false);
+                  setIsMapOpen(false);
                 }}
                 className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
                   isRadioOpen
                     ? "opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(30,204,230,0.8)]"
-                    : "opacity-45 hover:opacity-100"
+                    : "opacity-80 hover:opacity-100 hover:scale-105"
                 }`}
                 title="Inter-Warden Radio & Dispatches"
               >
@@ -1061,11 +1061,12 @@ export default function WardenMainScreen() {
                   setIsRadioOpen(false);
                   setIsEfficiencyOpen(false);
                   setIsPhoneOpen(false);
+                  setIsMapOpen(false);
                 }}
                 className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
                   isStaffOpen
                     ? "opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(30,204,230,0.8)]"
-                    : "opacity-45 hover:opacity-100"
+                    : "opacity-80 hover:opacity-100 hover:scale-105"
                 }`}
                 title="Staff Directory"
               >
@@ -1081,11 +1082,12 @@ export default function WardenMainScreen() {
                   setIsRadioOpen(false);
                   setIsStaffOpen(false);
                   setIsPhoneOpen(false);
+                  setIsMapOpen(false);
                 }}
                 className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
                   isEfficiencyOpen
                     ? "opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(36,169,81,0.8)]"
-                    : "opacity-45 hover:opacity-100"
+                    : "opacity-80 hover:opacity-100 hover:scale-105"
                 }`}
                 title="Efficiency & Power Consumption"
               >
@@ -1101,15 +1103,37 @@ export default function WardenMainScreen() {
                   setIsRadioOpen(false);
                   setIsStaffOpen(false);
                   setIsEfficiencyOpen(false);
+                  setIsMapOpen(false);
                 }}
                 className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
                   isPhoneOpen
                     ? "opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(200,115,150,0.8)]"
-                    : "opacity-45 hover:opacity-100"
+                    : "opacity-80 hover:opacity-100 hover:scale-105"
                 }`}
                 title="Telephone Comms & Automated Patient Calls"
               >
                 <Image src="/phone.svg" alt="Phone" width={18} height={18} />
+              </button>
+
+              {/* Map Pin / Smartwatch 3D HUD */}
+              <button
+                aria-label="3D Campus Map & Smartwatch HUD"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMapOpen((prev) => !prev);
+                  setIsRadioOpen(false);
+                  setIsStaffOpen(false);
+                  setIsEfficiencyOpen(false);
+                  setIsPhoneOpen(false);
+                }}
+                className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
+                  isMapOpen
+                    ? "opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(30,204,230,0.8)]"
+                    : "opacity-80 hover:opacity-100 hover:scale-105"
+                }`}
+                title="3D Campus Map & Smartwatch HUD"
+              >
+                <Image src="/map-pin.svg" alt="Map Pin" width={18} height={18} />
               </button>
             </aside>
 
@@ -1141,10 +1165,10 @@ export default function WardenMainScreen() {
               currentFloor={currentFloor}
             />
 
-            {/* Night-Shift Memory Glass Card (§29, §34) */}
-            <NightShiftMemoryCard
-              isOpen={isMemoryOpen}
-              onClose={() => setIsMemoryOpen(false)}
+            {/* Smartwatch 3D Map HUD */}
+            <SmartwatchMapCard
+              isOpen={isMapOpen}
+              onClose={() => setIsMapOpen(false)}
               currentFloor={currentFloor}
             />
 
@@ -1282,66 +1306,143 @@ export default function WardenMainScreen() {
                 {/* Live ECG strip + vitals (occupied beds only) */}
                 {isOccupied && (
                   <>
-                    <div className="relative h-[42px] rounded-[10px] border border-white/[0.06] bg-[#0A0D13]/70 ecg-grid overflow-hidden">
-                      {/* Scrolling trace — two identical halves loop seamlessly */}
-                      <div
-                        className="absolute inset-y-0 left-0 flex w-[200%] ecg-scroll"
-                        style={{
-                          animationDuration: isCritical ? "2.6s" : "4.5s",
-                          maskImage: "linear-gradient(90deg, transparent 0%, black 14%)",
-                          WebkitMaskImage: "linear-gradient(90deg, transparent 0%, black 14%)",
-                        }}
-                      >
-                        {[0, 1].map((half) => (
-                          <svg key={half} viewBox="0 0 540 42" preserveAspectRatio="none" className="block h-full w-1/2" aria-hidden="true">
+                    {/* Real Data Telemetry Trend Graph plotted from Supabase vitals history */}
+                    {(() => {
+                      const telemetryList = chronVitals.length > 0
+                        ? chronVitals
+                        : [{ heart_rate: vitalsHR, recorded_at: new Date().toISOString() }];
+                      const hrs = telemetryList.map((v) => Number(v.heart_rate) || 72);
+                      const minVal = Math.min(...hrs);
+                      const maxVal = Math.max(...hrs);
+                      const spread = Math.max(maxVal - minVal, 16);
+                      const gMin = minVal - 3;
+                      const gRange = spread + 6;
+
+                      // Map each real data point across viewBox 0 0 300 48
+                      const pts = telemetryList.map((v, i, arr) => {
+                        const hr = Number(v.heart_rate) || 72;
+                        const x = arr.length === 1 ? 150 : 12 + (i / (arr.length - 1)) * 276;
+                        const y = 42 - ((hr - gMin) / gRange) * 32;
+                        return { x, y, hr, ts: v.recorded_at };
+                      });
+
+                      const lineD = pts.length === 1
+                        ? `M 12,${pts[0].y.toFixed(1)} L 288,${pts[0].y.toFixed(1)}`
+                        : pts.reduce((acc, p, i) => `${acc} ${i === 0 ? "M" : "L"} ${p.x.toFixed(1)},${p.y.toFixed(1)}`, "");
+
+                      const areaD = pts.length === 1
+                        ? `M 12,48 L 12,${pts[0].y.toFixed(1)} L 288,${pts[0].y.toFixed(1)} L 288,48 Z`
+                        : `${lineD} L ${pts[pts.length - 1].x.toFixed(1)},48 L ${pts[0].x.toFixed(1)},48 Z`;
+
+                      const strokeColor = isCritical ? "#E61E67" : tone.accent;
+                      const fillColor = isCritical ? "#E61E67" : tone.accent;
+
+                      return (
+                        <div className="relative h-[48px] rounded-[10px] border border-white/[0.06] bg-[#0A0D13]/85 overflow-hidden">
+                          {/* Real Data SVG Telemetry Chart */}
+                          <svg viewBox="0 0 300 48" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+                            <defs>
+                              <linearGradient id={`vitalsGrad-${selectedBed?.id || 'bed'}`} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={fillColor} stopOpacity="0.32" />
+                                <stop offset="100%" stopColor={fillColor} stopOpacity="0.0" />
+                              </linearGradient>
+                            </defs>
+
+                            {/* Background Grid Guidelines */}
+                            <line x1="0" y1="12" x2="300" y2="12" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
+                            <line x1="0" y1="26" x2="300" y2="26" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
+                            <line x1="0" y1="40" x2="300" y2="40" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
+
+                            {/* Area Fill Under Real Curve */}
+                            <path d={areaD} fill={`url(#vitalsGrad-${selectedBed?.id || 'bed'})`} />
+
+                            {/* Telemetry Line */}
                             <path
-                              d={ECG_PATH}
+                              d={lineD}
                               fill="none"
-                              stroke={isCritical ? "#E61E67" : "#1ECCE6"}
-                              strokeWidth="1.6"
-                              strokeLinejoin="round"
+                              stroke={strokeColor}
+                              strokeWidth="1.8"
                               strokeLinecap="round"
-                              vectorEffect="non-scaling-stroke"
-                              style={{ filter: `drop-shadow(0 0 3px ${isCritical ? "#E61E67" : "#1ECCE6"}80)` }}
+                              strokeLinejoin="round"
+                              style={{ filter: `drop-shadow(0 0 3px ${strokeColor}99)` }}
                             />
+
+                            {/* Real Data Points from Supabase */}
+                            {pts.map((p, idx) => {
+                              const isLatest = idx === pts.length - 1;
+                              return (
+                                <g key={idx}>
+                                  {isLatest && (
+                                    <circle cx={p.x} cy={p.y} r="4.5" fill={strokeColor} opacity="0.28" />
+                                  )}
+                                  <circle
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r={isLatest ? 2.6 : 1.8}
+                                    fill={isLatest ? "#FFFFFF" : strokeColor}
+                                    stroke={strokeColor}
+                                    strokeWidth="1"
+                                  />
+                                </g>
+                              );
+                            })}
                           </svg>
-                        ))}
-                      </div>
 
-                      {/* Heart-rate badge */}
-                      <div className="absolute left-[9px] top-1/2 -translate-y-1/2 flex items-center gap-[6px]">
-                        <svg
-                          width="11"
-                          height="11"
-                          viewBox="0 0 24 24"
-                          fill={isCritical ? "#E61E67" : "none"}
-                          stroke={isCritical ? "#E61E67" : "#1ECCE6"}
-                          strokeWidth="2"
-                          className={isCritical ? "animate-pulse" : ""}
-                        >
-                          <path d="M19.5 13.6 12 21l-7.5-7.4A5.2 5.2 0 0 1 12 6.2a5.2 5.2 0 0 1 7.5 7.4z" />
-                        </svg>
-                        <span
-                          className={`text-[15px] leading-none font-mono font-semibold ${
-                            isCritical ? "text-[#FF9DB2] animate-pulse" : "text-white"
-                          }`}
-                        >
-                          {vitalsHR}
-                        </span>
-                        <span className="text-[8px] font-medium uppercase tracking-[0.16em] text-[#6D7385]">bpm</span>
-                      </div>
+                          {/* Heart-rate & Live Vitals Overlay */}
+                          <div className="absolute left-[9px] top-1/2 -translate-y-1/2 flex items-center gap-[6px] pointer-events-none">
+                            <svg
+                              width="11"
+                              height="11"
+                              viewBox="0 0 24 24"
+                              fill={isCritical ? "#E61E67" : "none"}
+                              stroke={isCritical ? "#E61E67" : "#1ECCE6"}
+                              strokeWidth="2"
+                              className={isCritical ? "animate-pulse" : ""}
+                            >
+                              <path d="M19.5 13.6 12 21l-7.5-7.4A5.2 5.2 0 0 1 12 6.2a5.2 5.2 0 0 1 7.5 7.4z" />
+                            </svg>
+                            <span
+                              className={`text-[15px] leading-none font-mono font-semibold ${
+                                isCritical ? "text-[#FF9DB2] animate-pulse" : "text-white"
+                              }`}
+                            >
+                              {vitalsHR}
+                            </span>
+                            <span className="text-[8px] font-medium uppercase tracking-[0.16em] text-[#6D7385]">bpm</span>
+                            {chronVitals.length > 1 && (
+                              <span
+                                className={`text-[8.5px] font-mono px-1 py-0.2 rounded font-bold ${
+                                  hrDelta > 0
+                                    ? isCritical ? "text-[#FF9DB2] bg-red-950/40" : "text-[#F4B476] bg-amber-950/30"
+                                    : "text-[#82D99E] bg-green-950/30"
+                                }`}
+                              >
+                                {hrDelta > 0 ? `+${hrDelta}` : hrDelta}
+                              </span>
+                            )}
+                          </div>
 
-                      {/* Live / last-recording indicator */}
-                      <div className="absolute right-[9px] top-1/2 -translate-y-1/2 flex items-center gap-[4px]">
-                        <span
-                          className={`w-[5px] h-[5px] rounded-full ${isLoadingDrilldown ? "" : "animate-pulse"}`}
-                          style={{ background: isLoadingDrilldown ? "#F0B429" : "#1ECCE6", boxShadow: "0 0 6px rgba(30, 204, 230, 0.8)" }}
-                        />
-                        <span className="text-[8px] font-semibold tracking-[0.18em] text-[#7A8095]">
-                          {isLoadingDrilldown ? "SYNC" : vitalsTime || "LIVE"}
-                        </span>
-                      </div>
-                    </div>
+                          {/* Live Telemetry Info & Data Points Counter */}
+                          <div className="absolute right-[9px] top-1/2 -translate-y-1/2 flex items-center gap-[6px] pointer-events-none">
+                            <span className="text-[8px] font-mono text-[#7A8095]">
+                              {chronVitals.length > 0 ? `${chronVitals.length} logs` : "1 log"}
+                            </span>
+                            <div className="flex items-center gap-[4px]">
+                              <span
+                                className={`w-[5px] h-[5px] rounded-full ${isLoadingDrilldown ? "" : "animate-pulse"}`}
+                                style={{
+                                  background: isLoadingDrilldown ? "#F0B429" : strokeColor,
+                                  boxShadow: `0 0 6px ${strokeColor}cc`,
+                                }}
+                              />
+                              <span className="text-[8px] font-semibold tracking-[0.18em] text-[#7A8095]">
+                                {isLoadingDrilldown ? "SYNC" : vitalsTime || "LIVE"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Vitals strip — hairline dividers instead of boxes */}
                     <div className="grid grid-cols-4 divide-x divide-white/[0.07]">
@@ -1470,7 +1571,7 @@ export default function WardenMainScreen() {
                 </div>
               )}
 
-              {/* ThinkingOrb Anchored on Bottom-Right Corner with Voice State Reactivity & 5s Long-Press */}
+              {/* ThinkingOrb Anchored on Bottom-Right Corner with Voice State Reactivity & 2.5s Long-Press */}
               <div
                 onMouseDown={handleOrbMouseDown}
                 onMouseUp={handleOrbMouseUp}
@@ -1478,7 +1579,7 @@ export default function WardenMainScreen() {
                 onTouchEnd={handleOrbMouseUp}
                 onClick={toggleVoiceSession}
                 className="absolute -right-[14px] -bottom-[14px] z-30 pointer-events-auto cursor-pointer group"
-                title={`${voiceStatusText} (Click to toggle voice, click & hold 5s for settings)`}
+                title={`${voiceStatusText} (Click to toggle voice, click & hold 2.5s for settings)`}
               >
                 <ThinkingOrb state={orbState} size={64} speed={orbSpeed} />
                 {isPlayingAudio && (
@@ -1694,7 +1795,7 @@ export default function WardenMainScreen() {
                 onTouchEnd={handleOrbMouseUp}
                 onClick={toggleVoiceSession}
                 className="absolute -right-[14px] -bottom-[14px] z-30 pointer-events-auto cursor-pointer group"
-                title={`${voiceStatusText} (Click to toggle voice, click & hold 5s for settings)`}
+                title={`${voiceStatusText} (Click to toggle voice, click & hold 2.5s for settings)`}
               >
                 <ThinkingOrb state={orbState} size={64} speed={orbSpeed} />
                 {isPlayingAudio && (
@@ -1708,19 +1809,228 @@ export default function WardenMainScreen() {
         </div>
 
         {/* =====================================================================
-            SCREEN 3: DIAGNOSTICS & TELEMETRY
+            SCREEN 3: FOOD & NUTRITION INVENTORY
            ===================================================================== */}
-        <div className="relative w-screen h-screen shrink-0 overflow-hidden flex flex-col items-center justify-center text-[#8E92A4]">
-          <div className="text-[16px] font-medium tracking-[0.06em]">
-            Ward Diagnostics & Telemetry Screen 3
-          </div>
-          <div className="text-[12px] text-[#6D7282] mt-2">
-            Swipe left or click the swipe dots to navigate back
+        <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
+          <div className="relative h-full aspect-[1646/1504] max-w-none shrink-0">
+            {/* Base B&W / Grey Fridge Render */}
+            <div className="absolute inset-0 w-full h-full">
+              <Image
+                src="/fridge.png"
+                alt="Clinical Nutrition Fridge"
+                fill
+                priority
+                sizes="100vw"
+                className="object-contain object-center pointer-events-none"
+              />
+            </div>
+
+            {/* SVG ClipPath defining the colored regions for selected/matching items */}
+            <svg className="absolute w-0 h-0 pointer-events-none" aria-hidden="true">
+              <defs>
+                <clipPath id="food-color-clip" clipPathUnits="objectBoundingBox">
+                  {activeColoredFoods.map((item) => (
+                    <rect
+                      key={item.id}
+                      x={item.leftPct / 100}
+                      y={item.topPct / 100}
+                      width={item.widthPct / 100}
+                      height={item.heightPct / 100}
+                      rx="0.012"
+                      ry="0.012"
+                    />
+                  ))}
+                </clipPath>
+              </defs>
+            </svg>
+
+            {/* Coloured Overlay Image - revealed strictly where items are clipped */}
+            <div className="absolute inset-0 w-full h-full pointer-events-none">
+              <Image
+                src="/fridge-coloured.png"
+                alt="Coloured Nutrition Items"
+                fill
+                priority
+                sizes="100vw"
+                className="object-contain object-center transition-all duration-300"
+                style={{
+                  clipPath: activeColoredFoods.length > 0 ? "url(#food-color-clip)" : "inset(0 0 100% 0)",
+                }}
+              />
+            </div>
+
+            {/* Interactive Clickable Hitbox Overlays for Food Items */}
+            {FOOD_INVENTORY.map((item) => {
+              const isSelected = selectedFood?.id === item.id;
+              const isMatchingSearch = foodSearchQuery
+                ? item.name.toLowerCase().includes(foodSearchQuery.toLowerCase()) ||
+                  item.category.toLowerCase().includes(foodSearchQuery.toLowerCase())
+                : false;
+
+              return (
+                <div
+                  key={item.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedFood(item);
+                  }}
+                  className={`absolute cursor-pointer transition-all duration-200 z-10 rounded-lg ${
+                    isSelected
+                      ? "ring-2 ring-[#1ECCE6] shadow-[0_0_15px_rgba(30,204,230,0.5)] bg-[#1ECCE6]/[0.06]"
+                      : isMatchingSearch
+                      ? "ring-1 ring-[#F4B476] shadow-[0_0_10px_rgba(244,180,118,0.4)] bg-[#F4B476]/[0.05]"
+                      : "hover:bg-white/[0.06] hover:ring-1 hover:ring-white/30"
+                  }`}
+                  style={{
+                    left: `${item.leftPct}%`,
+                    top: `${item.topPct}%`,
+                    width: `${item.widthPct}%`,
+                    height: `${item.heightPct}%`,
+                  }}
+                  title={`${item.name} (${item.category})`}
+                />
+              );
+            })}
+
+            {/* Floating Text Label pointing to the selected food item */}
+            {selectedFood && (
+              <div
+                className="absolute z-20 pointer-events-none transition-all duration-300"
+                style={{
+                  left: `${selectedFood.leftPct + selectedFood.widthPct / 2}%`,
+                  top: `${Math.max(selectedFood.topPct - 3.4, 4)}%`,
+                  transform: "translateX(-50%)",
+                }}
+              >
+                <div className="figma-glass-card px-2.5 py-0.5 rounded-full text-[11px] font-medium text-white shadow-lg flex items-center gap-1.5 whitespace-nowrap border border-white/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#1ECCE6] animate-pulse" />
+                  <span>{selectedFood.name}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Glassmorphism Search Pill */}
+            <div
+              className="absolute z-20 figma-glass-card rounded-[12px] px-[14px] py-[6px] flex items-center gap-[8px]"
+              style={{
+                right: "4.8%",
+                bottom: "41.5%",
+                width: "21.8%",
+                minWidth: "210px",
+                maxWidth: "248px",
+                height: "32px",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="text"
+                value={foodSearchQuery}
+                onChange={(e) => setFoodSearchQuery(e.target.value)}
+                placeholder="Search nutrition inventory..."
+                className="w-full bg-transparent text-[11px] text-white/90 placeholder-[#6D7385] outline-none font-normal"
+              />
+              {foodSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setFoodSearchQuery("")}
+                  className="text-[#6D7385] hover:text-white text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Glassmorphism Nutrition Detail Card */}
+            <div
+              className="absolute z-20 figma-glass-card rounded-[18px] p-[18px] pb-[16px] flex flex-col justify-between"
+              style={{
+                right: "4.5%",
+                bottom: "7.2%",
+                width: "21.8%",
+                minWidth: "210px",
+                maxWidth: "248px",
+                height: "235px",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {selectedFood ? (
+                <>
+                  <div className="flex flex-col">
+                    <div className="flex items-center justify-between gap-1">
+                      <h2 className="text-white text-[17px] font-semibold tracking-[-0.02em] leading-tight truncate">
+                        {selectedFood.name}
+                      </h2>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#1ECCE6]/20 text-[#1ECCE6] font-bold shrink-0">
+                        {selectedFood.stock}
+                      </span>
+                    </div>
+                    <span className="text-[#9BA1B2] text-[10.5px] font-normal mt-[2px] truncate">
+                      {selectedFood.category} · {selectedFood.location}
+                    </span>
+                  </div>
+
+                  {/* Nutrition Highlights Strip */}
+                  <div className="grid grid-cols-3 divide-x divide-white/10 bg-white/[0.03] rounded-lg py-1 border border-white/5 my-1 text-center">
+                    <div>
+                      <div className="text-[7.5px] text-[#7A8095] uppercase font-semibold">Calories</div>
+                      <div className="text-[12px] font-mono font-bold text-white mt-0.5">{selectedFood.calories}</div>
+                    </div>
+                    <div>
+                      <div className="text-[7.5px] text-[#7A8095] uppercase font-semibold">Protein</div>
+                      <div className="text-[12px] font-mono font-bold text-[#82D99E] mt-0.5">{selectedFood.protein}</div>
+                    </div>
+                    <div>
+                      <div className="text-[7.5px] text-[#7A8095] uppercase font-semibold">Carbs</div>
+                      <div className="text-[12px] font-mono font-bold text-[#F4B476] mt-0.5">{selectedFood.carbs}</div>
+                    </div>
+                  </div>
+
+                  {/* Dietary & Clinical Suitability Tags */}
+                  <div className="my-[3px] flex flex-wrap gap-1">
+                    {selectedFood.dietary.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="px-1.5 py-0.5 rounded bg-white/10 text-[8.5px] text-[#C1C6D7] leading-tight font-medium"
+                      >
+                        ✓ {tag}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="relative pt-1 flex items-center justify-between text-[9px] text-[#7A8095]">
+                    <span>Storage: 3.4°C · Monitored</span>
+                    <span className="text-[#82D99E] font-semibold">Fresh</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-full text-xs text-[#8E92A4]">
+                  <span>Select food item from fridge</span>
+                </div>
+              )}
+
+              {/* ThinkingOrb on bottom right */}
+              <div
+                onMouseDown={handleOrbMouseDown}
+                onMouseUp={handleOrbMouseUp}
+                onTouchStart={handleOrbMouseDown}
+                onTouchEnd={handleOrbMouseUp}
+                onClick={toggleVoiceSession}
+                className="absolute -right-[14px] -bottom-[14px] z-30 pointer-events-auto cursor-pointer group"
+                title={`${voiceStatusText} (Click to toggle voice, click & hold 2.5s for settings)`}
+              >
+                <ThinkingOrb state={orbState} size={64} speed={orbSpeed} />
+                {isPlayingAudio && (
+                  <span className="absolute -top-6 right-0 text-[10px] bg-black/70 px-2 py-0.5 rounded text-[#1ECCE6] whitespace-nowrap pointer-events-none animate-pulse">
+                    Speaking
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Modular Voice Architecture Settings Modal (Triggered by 5s long-press on Orb) */}
+      {/* Modular Voice Architecture Settings Modal (Triggered by 2.5s long-press on Orb) */}
       <VoiceSettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
