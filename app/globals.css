@@ -18,19 +18,20 @@ body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
 .figma-glass-card {
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(20, 24, 33, 0.90) 22%,
-    rgba(15, 19, 27, 0.93) 72%,
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(24, 29, 39, 0.88) 12%,
+    rgba(18, 22, 31, 0.91) 45%,
+    rgba(14, 18, 25, 0.94) 80%,
     rgba(10, 13, 19, 0.96) 100%
   );
   backdrop-filter: blur(28px) saturate(145%);
   -webkit-backdrop-filter: blur(28px) saturate(145%);
-  border-top: 1px solid rgba(255, 255, 255, 0.35);
-  border-left: 1px solid rgba(255, 255, 255, 0.22);
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.28);
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+  border-right: 1px solid rgba(255, 255, 255, 0.10);
   border-bottom: 1px solid rgba(0, 0, 0, 0.60);
   box-shadow:
-    inset 1px 1px 2px 0px rgba(255, 255, 255, 0.25),
+    inset 1px 1px 2px 0px rgba(255, 255, 255, 0.22),
     inset -2px -2px 5px 0px rgba(0, 0, 0, 0.55),
     inset 0 0 20px 0px rgba(255, 255, 255, 0.02),
     0 24px 55px -4px rgba(0, 0, 0, 0.85),
@@ -40,6 +41,11 @@ body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
 /* Subtle dark drop shadow for main transparent render with high blur */
 .main-image-shadow {
   filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.15));
+}
+
+/* Natural ambient drop shadow for the freestanding nutrition fridge */
+.fridge-drop-shadow {
+  filter: drop-shadow(0 28px 50px rgba(0, 0, 0, 0.55)) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.40));
 }
 
 /* User-Specified Bed Glows (Ward Screen) */

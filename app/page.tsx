@@ -852,31 +852,19 @@ export default function WardenMainScreen() {
                 </svg>
               </button>
               <span className="select-none min-w-[50px] text-center">Floor {currentFloor}</span>
-              <span
-                className={`hidden lg:inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${
-                  wardRealtime.connectionState === "live"
-                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
-                    : wardRealtime.connectionState === "degraded"
-                    ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
-                    : "border-white/10 bg-white/5 text-[#8E92A4]"
-                }`}
-                title={
-                  wardRealtime.lastEventAt
-                    ? `Last ward event ${new Date(wardRealtime.lastEventAt).toLocaleTimeString()}`
-                    : "Waiting for the ward event stream"
-                }
-              >
+              {wardRealtime.connectionState === "live" && (
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    wardRealtime.connectionState === "live"
-                      ? "bg-emerald-300"
-                      : wardRealtime.connectionState === "degraded"
-                      ? "bg-amber-300"
-                      : "bg-[#727889] animate-pulse"
-                  }`}
-                />
-                {wardRealtime.connectionState === "live" ? "Ward live" : wardRealtime.connectionState}
-              </span>
+                  className="hidden lg:inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+                  title={
+                    wardRealtime.lastEventAt
+                      ? `Last ward event ${new Date(wardRealtime.lastEventAt).toLocaleTimeString()}`
+                      : "Ward realtime sync active"
+                  }
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                  Ward live
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -987,20 +975,21 @@ export default function WardenMainScreen() {
             })}
 
             {wardEvents.length > 0 && (
-              <aside className="absolute bottom-[26px] left-1/2 z-20 w-[330px] -translate-x-1/2 rounded-[14px] border border-white/[0.08] bg-[#11151D]/80 px-[12px] py-[9px] shadow-2xl backdrop-blur-xl pointer-events-none">
-                <div className="mb-[6px] flex items-center justify-between text-[8px] font-semibold uppercase tracking-[0.18em] text-[#697084]">
-                  <span>Live ward activity</span>
-                  <span className="flex items-center gap-[4px] text-[#1ECCE6]">
-                    <span className="h-[4px] w-[4px] rounded-full bg-[#1ECCE6] animate-pulse" /> now
+              <aside className="absolute bottom-[26px] left-1/2 z-20 w-[340px] -translate-x-1/2 rounded-[16px] figma-glass-card px-[14px] py-[10px] shadow-[0_20px_45px_rgba(0,0,0,0.75)] pointer-events-none">
+                <div className="mb-[6px] flex items-center justify-between text-[8.5px] font-semibold uppercase tracking-[0.16em] text-[#8E93A4]">
+                  <span className="flex items-center gap-[5px]">
+                    <span className="h-[5px] w-[5px] rounded-full bg-[#1ECCE6] shadow-[0_0_6px_#1ECCE6]" />
+                    Live ward activity
                   </span>
+                  <span className="font-mono text-[8px] text-[#1ECCE6]/90">stream live</span>
                 </div>
-                <div className="space-y-[5px]">
+                <div className="space-y-[6px]">
                   {wardEvents.slice(0, 3).map((event) => (
-                    <div key={event.id} className="flex items-center gap-[7px] text-[9px] leading-tight">
-                      <span className="h-[5px] w-[5px] shrink-0 rounded-full" style={{ background: event.source === 'task' ? '#F0B429' : event.source === 'patient' ? '#E61E67' : '#1ECCE6' }} />
-                      <span className="min-w-0 flex-1 truncate text-[#BCC2D0]">{event.message}</span>
-                      {event.bedNumber && <span className="shrink-0 font-semibold text-[#DDE1EA]">Bed {event.bedNumber}</span>}
-                      <span className="shrink-0 font-mono text-[#697084]">{elapsedLabel(event.occurredAt)}</span>
+                    <div key={event.id} className="flex items-center gap-[8px] text-[9.5px] leading-snug">
+                      <span className="h-[5px] w-[5px] shrink-0 rounded-full" style={{ background: event.source === 'task' ? '#F0B429' : event.source === 'patient' ? '#E61E67' : '#1ECCE6', boxShadow: `0 0 5px ${event.source === 'task' ? '#F0B42980' : event.source === 'patient' ? '#E61E6780' : '#1ECCE680'}` }} />
+                      <span className="min-w-0 flex-1 truncate text-[#E2E6F0] font-normal">{event.message}</span>
+                      {event.bedNumber && <span className="shrink-0 font-semibold text-white/90 bg-white/[0.06] px-1.5 py-0.5 rounded text-[8.5px]">Bed {event.bedNumber}</span>}
+                      <span className="shrink-0 font-mono text-[8px] text-[#7A8095]">{elapsedLabel(event.occurredAt)}</span>
                     </div>
                   ))}
                 </div>
@@ -1128,8 +1117,8 @@ export default function WardenMainScreen() {
                 }}
                 className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
                   isMapOpen
-                    ? "opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(30,204,230,0.8)]"
-                    : "opacity-80 hover:opacity-100 hover:scale-105"
+                    ? "opacity-90 scale-110 drop-shadow-[0_0_8px_rgba(30,204,230,0.8)]"
+                    : "opacity-55 hover:opacity-85 hover:scale-105"
                 }`}
                 title="3D Campus Map & Smartwatch HUD"
               >
@@ -1812,7 +1801,7 @@ export default function WardenMainScreen() {
             SCREEN 3: FOOD & NUTRITION INVENTORY
            ===================================================================== */}
         <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
-          <div className="relative h-full aspect-[1646/1504] max-w-none shrink-0">
+          <div className="relative h-full aspect-[1646/1504] max-w-none shrink-0 fridge-drop-shadow">
             {/* Base B&W / Grey Fridge Render */}
             <div className="absolute inset-0 w-full h-full">
               <Image
