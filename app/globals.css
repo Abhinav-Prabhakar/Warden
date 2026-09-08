@@ -8,6 +8,48 @@
   --font-urbanist: "Urbanist", -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+.warden-theme {
+  background: #2e333a;
+  color-scheme: dark;
+  transition: background-color 320ms ease, color 320ms ease;
+}
+
+.warden-theme .theme-scene,
+.warden-theme .figma-glass-card,
+.warden-theme .theme-toggle {
+  transition: filter 320ms ease, background 320ms ease, border-color 320ms ease, box-shadow 320ms ease;
+}
+
+.warden-theme.theme-light {
+  background: radial-gradient(circle at 50% 35%, #46515a 0%, #343b43 62%, #292f36 100%);
+  color-scheme: dark;
+}
+
+.theme-light .theme-scene {
+  filter: brightness(1.62) contrast(0.94) saturate(1.06) drop-shadow(0 20px 38px rgba(0, 0, 0, 0.28));
+}
+
+.theme-light .theme-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 38%, rgba(235, 249, 255, 0.18), transparent 64%);
+  mix-blend-mode: screen;
+}
+
+.theme-light .theme-toggle {
+  color: #E8FCFF;
+  border-color: rgba(193, 240, 248, 0.35) !important;
+  background: rgba(30, 204, 230, 0.12) !important;
+  box-shadow: 0 0 16px rgba(30, 204, 230, 0.28), inset 0 0 8px rgba(232, 252, 255, 0.12);
+}
+
+.theme-light .bed-glow-green { background-color: rgba(30, 230, 57, 0.34); box-shadow: 0 0 170px 62px rgba(30, 230, 57, 0.22); }
+.theme-light .bed-glow-orange { background-color: rgba(230, 127, 30, 0.66); box-shadow: 0 0 180px 66px rgba(230, 127, 30, 0.34); }
+.theme-light .bed-glow-red { background-color: rgba(230, 30, 30, 0.58); box-shadow: 0 0 180px 66px rgba(230, 30, 30, 0.30); }
+.theme-light .medication-asset { filter: brightness(1.28) saturate(1.16); }
+
 body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-urbanist), -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -156,4 +198,3 @@ body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
 @keyframes shimmer-sweep {
   100% { transform: translateX(100%); }
 }
-
