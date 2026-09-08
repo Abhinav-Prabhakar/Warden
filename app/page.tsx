@@ -12,6 +12,8 @@ import { EnergyEfficiencyCard } from "@/app/components/EnergyEfficiencyCard";
 import { TelephoneCallAssistantCard } from "@/app/components/TelephoneCallAssistantCard";
 import { SmartwatchMapCard } from "@/app/components/SmartwatchMapCard";
 import { IncomingAdmissionsCard } from "@/app/components/IncomingAdmissionsCard";
+import { MedicationAsset } from "@/app/components/pharmacy/MedicationAsset";
+import { arrangeMedicationShelf, ITEMS_PER_SHELF_PAGE, type ShelfPlacement } from "@/lib/pharmacy/layout";
 
 interface BedOverlay {
   id: string;
@@ -29,12 +31,12 @@ interface BedOverlay {
   operational?: BedOperationalProjection;
 }
 
-type BedProcessKey = "cleaning" | "transport" | "discharge" | "reservation";
+type BedProcessKey = "cleaning" | "transport" | "discharge" | "reservation" | "medication";
 
 interface BedOperationalProjection {
   occupancy: "occupied" | "reserved" | "vacant";
   bedStatus: string;
-  processes: Record<BedProcessKey, { id?: string; status: string; requestedAt?: string; plannedAt?: string } | null>;
+  processes: Record<BedProcessKey, { id?: string; status: string; requestedAt?: string; plannedAt?: string; name?: string } | null>;
   ownership: { id: string; name: string; role?: string } | null;
   urgency: "routine" | "urgent" | "stat";
   openTaskCount: number;
@@ -57,6 +59,7 @@ const PROCESS_MARKERS: Record<BedProcessKey, { label: string; color: string }> =
   transport: { label: "T", color: "#1ECCE6" },
   discharge: { label: "D", color: "#A78BFA" },
   reservation: { label: "R", color: "#60A5FA" },
+  medication: { label: "M", color: "#E61E67" },
 };
 
 interface BedGeometry {
@@ -321,20 +324,6 @@ function dischargeLabel(ts?: string): string {
     : `${d.toLocaleDateString([], { weekday: "short" })} ${time}`;
 }
 
-// Pharmacy highlighted items
-interface ShelfItem {
-  id: string;
-  name: string;
-  category: string;
-  indication: string[];
-  colorType: "cyan" | "orange" | "green" | "magenta";
-  leftPct: number;
-  topPct: number;
-  widthPct: number;
-  heightPct: number;
-  isBottleShape?: boolean;
-}
-
 export interface FoodInventoryItem {
   id: string;
   name: string;
@@ -392,11 +381,14 @@ export default function WardenMainScreen() {
   const [changedBedName, setChangedBedName] = useState<string | null>(null);
 
   // Live Pharmacy items state from Supabase
-  const [shelfItems, setShelfItems] = useState<ShelfItem[]>([]);
+  const [shelfItems, setShelfItems] = useState<ShelfPlacement[]>([]);
   const [shelfLoading, setShelfLoading] = useState<boolean>(true);
   const [shelfError, setShelfError] = useState<string | null>(null);
-  const [selectedMed, setSelectedMed] = useState<ShelfItem | null>(null);
+  const [selectedMed, setSelectedMed] = useState<ShelfPlacement | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [shelfPage, setShelfPage] = useState(0);
+  const [pharmacyContext, setPharmacyContext] = useState<BedOverlay | null>(null);
+  const [medicationRequest, setMedicationRequest] = useState<{ kind: "idle" | "working" | "error"; message: string }>({ kind: "idle", message: "" });
   const [orderDropLocation, setOrderDropLocation] = useState<string>("Bed 3 (Floor 7)");
   const [orderStatus, setOrderStatus] = useState<{ kind: "idle" | "ordering" | "success" | "error"; message: string }>({
     kind: "idle",
@@ -412,6 +404,7 @@ export default function WardenMainScreen() {
     const medName = pm.medication?.name || "";
     if (selectedBed) {
       setOrderDropLocation(`${selectedBed.name} (Floor ${currentFloor})`);
+      setPharmacyContext(selectedBed);
     }
     // Find matching item on shelf
     const matched = shelfItems.find(
@@ -421,9 +414,13 @@ export default function WardenMainScreen() {
     );
     if (matched) {
       setSelectedMed(matched);
+      if (typeof matched.page === "number") {
+        setShelfPage(matched.page);
+      }
     }
     setSearchQuery(medName);
     setOrderStatus({ kind: "idle", message: "" });
+    setMedicationRequest({ kind: "idle", message: "" });
     // Switch to Pharmacy screen (Screen 2)
     setActiveScreen(1);
   };
@@ -549,10 +546,10 @@ export default function WardenMainScreen() {
       })
       .then((data) => {
         if (data && !data.error && Array.isArray(data.items)) {
-          setShelfItems(data.items);
-          if (data.items.length > 0) {
-            const benadryl = data.items.find((i: ShelfItem) => i.name.toLowerCase().includes("benadryl"));
-            setSelectedMed(benadryl || data.items[0]);
+          const arranged = arrangeMedicationShelf(data.items);
+          setShelfItems(arranged);
+          if (arranged.length > 0) {
+            setSelectedMed((current) => arranged.find((item) => item.id === current?.id) || arranged[0]);
           }
         } else {
           setShelfError(data?.error || "Failed to load pharmacy items");
@@ -564,6 +561,20 @@ export default function WardenMainScreen() {
       })
       .finally(() => setShelfLoading(false));
   }, []);
+
+  useEffect(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return;
+    const match = shelfItems.find((item) =>
+      item.name.toLowerCase().includes(query) ||
+      item.category.toLowerCase().includes(query) ||
+      Boolean(item.genericName?.toLowerCase().includes(query)),
+    );
+    if (match) {
+      setSelectedMed(match);
+      setShelfPage(match.page);
+    }
+  }, [searchQuery, shelfItems]);
 
   // 3. Fetch detailed clinical drilldown from Supabase whenever selectedBed or floor changes
   useEffect(() => {
@@ -807,6 +818,53 @@ export default function WardenMainScreen() {
       });
     } catch (error) {
       setBedAction({ kind: "error", message: error instanceof Error ? error.message : "Action failed" });
+    }
+  };
+
+  const openMedicationWorkspace = () => {
+    if (!selectedBed?.patientId) {
+      setBedAction({ kind: "error", message: "Medication requests require an occupied bed with a patient record." });
+      return;
+    }
+    setPharmacyContext(selectedBed);
+    setMedicationRequest({ kind: "idle", message: "" });
+    setActiveScreen(1);
+  };
+
+  const confirmMedicationRequest = async () => {
+    if (!pharmacyContext?.patientId || !selectedMed) return;
+    setMedicationRequest({ kind: "working", message: "Recording medication request…" });
+    try {
+      const response = await fetch('/api/medication-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId: pharmacyContext.patientId,
+          bedId: pharmacyContext.id,
+          medicationId: selectedMed.id,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `Request failed with HTTP ${response.status}`);
+      if (!result.request?.id) throw new Error('The server did not return a persisted medication request');
+
+      const medicationProcess = {
+        id: result.request.id,
+        status: result.request.status || 'requested',
+        requestedAt: result.request.requested_at || new Date().toISOString(),
+        name: selectedMed.name,
+      };
+      setBeds((current) => current.map((bed) => bed.id === pharmacyContext.id && bed.operational
+        ? { ...bed, color: 'orange', statusText: 'MEDICATION REQUESTED', operational: { ...bed.operational, processes: { ...bed.operational.processes, medication: medicationProcess } } }
+        : bed));
+      setSelectedBed((bed) => bed?.id === pharmacyContext.id && bed.operational
+        ? { ...bed, color: 'orange', statusText: 'MEDICATION REQUESTED', operational: { ...bed.operational, processes: { ...bed.operational.processes, medication: medicationProcess } } }
+        : bed);
+      setBedAction({ kind: "success", message: `${selectedMed.name} requested · ${result.request.id.slice(0, 8)}` });
+      setMedicationRequest({ kind: "idle", message: "" });
+      setActiveScreen(0);
+    } catch (error) {
+      setMedicationRequest({ kind: "error", message: error instanceof Error ? error.message : 'Medication request failed' });
     }
   };
 
@@ -1524,7 +1582,7 @@ export default function WardenMainScreen() {
                             className="shrink-0 rounded-full border px-[6px] py-[2px] text-[8px] font-semibold uppercase tracking-[0.08em]"
                             style={{ color: PROCESS_MARKERS[key].color, borderColor: `${PROCESS_MARKERS[key].color}45`, background: `${PROCESS_MARKERS[key].color}12` }}
                           >
-                            {key} · {process?.status.replaceAll("_", " ")}
+                            {process?.name || key} · {process?.status.replaceAll("_", " ")}
                           </span>
                         ))}
                         {bedOperations.ownership?.name && (
@@ -1570,6 +1628,14 @@ export default function WardenMainScreen() {
                 )}
                 <div className="flex items-center pt-[9px] border-t border-white/[0.08]">
                   <div className="flex items-center gap-[7px]">
+                    <button
+                      type="button"
+                      onClick={openMedicationWorkspace}
+                      disabled={bedAction.kind === "working"}
+                      className="flex items-center gap-[5px] px-[10px] h-[28px] rounded-[8px] bg-[#E61E67]/10 hover:bg-[#E61E67]/20 active:scale-[0.97] border border-[#E61E67]/25 text-[10.5px] font-medium text-[#FF9DB2] transition-all"
+                    >
+                      <span>Medication</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => runBedAction("porter")}
@@ -1689,67 +1755,44 @@ export default function WardenMainScreen() {
               </div>
             )}
 
-            {/* Highlighted Shelf Items */}
+            <div className="absolute left-[8.5%] top-[16.5%] z-20 flex items-center gap-[8px] rounded-full border border-white/10 bg-[#11151D]/75 px-[11px] py-[6px] text-[10px] backdrop-blur-xl">
+              {pharmacyContext ? (
+                <>
+                  <span className="font-semibold text-white">{pharmacyContext.name}</span>
+                  <span className="text-[#555C6D]">·</span>
+                  <span className="text-[#B6BDCC]">{pharmacyContext.patientName}</span>
+                  <span className="ml-[4px] text-[#E98BAB]">Medication request</span>
+                </>
+              ) : (
+                <span className="text-[#8E92A4]">Browse mode · select a patient from the ward to request medicine</span>
+              )}
+            </div>
+
+            {/* Generated shelf: data → package classification → shelf → slot */}
             {shelfItems
-              .filter((item) =>
-                searchQuery
-                  ? item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    item.category.toLowerCase().includes(searchQuery.toLowerCase())
-                  : true
-              )
+              .filter((item) => item.page === shelfPage)
               .map((item) => {
                 const isSelected = selectedMed?.id === item.id;
-                const glowClass =
-                  item.colorType === "cyan"
-                    ? "shelf-glow-cyan"
-                    : item.colorType === "green"
-                    ? "shelf-glow-green"
-                    : item.colorType === "orange"
-                    ? "shelf-glow-orange"
-                    : "shelf-glow-magenta";
-
+                const query = searchQuery.trim().toLowerCase();
+                const matched = !query || item.name.toLowerCase().includes(query) || item.category.toLowerCase().includes(query) || Boolean(item.genericName?.toLowerCase().includes(query));
                 return (
-                  <div
+                  <MedicationAsset
                     key={item.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedMed(item);
-                    }}
-                    className={`absolute cursor-pointer transition-transform duration-200 z-10 ${glowClass} ${
-                      item.isBottleShape ? "rounded-[5px]" : "rounded-[3px]"
-                    } ${
-                      isSelected
-                        ? "scale-[1.02] ring-1 ring-white/30"
-                        : "hover:scale-[1.02]"
-                    }`}
-                    style={{
-                      left: `${item.leftPct}%`,
-                      top: `${item.topPct}%`,
-                      width: `${item.widthPct}%`,
-                      height: `${item.heightPct}%`,
-                      ...(item.isBottleShape && {
-                        borderRadius: "6px 6px 4px 4px",
-                      }),
-                    }}
-                    title={item.name}
+                    item={item}
+                    selected={isSelected}
+                    matched={matched}
+                    onSelect={() => setSelectedMed(item)}
                   />
                 );
               })}
 
-            {/* Benadryl Floating Text Label */}
-            <div
-              className="absolute z-10 pointer-events-none text-center"
-              style={{
-                left: "37.30%",
-                top: "45.60%",
-                width: "2.73%",
-                transform: "translateX(-2px)",
-              }}
-            >
-              <span className="text-[#C87396] text-[12px] font-normal tracking-[0.02em] whitespace-nowrap">
-                Benadryl
-              </span>
-            </div>
+            {shelfItems.length > ITEMS_PER_SHELF_PAGE && (
+              <div className="absolute bottom-[5.8%] left-[34%] z-20 flex items-center gap-[8px] rounded-full border border-white/10 bg-[#11151D]/75 px-[8px] py-[5px] backdrop-blur-xl">
+                <button type="button" disabled={shelfPage === 0} onClick={() => setShelfPage((page) => Math.max(0, page - 1))} className="h-[22px] w-[22px] rounded-full bg-white/5 text-xs text-white disabled:opacity-25">‹</button>
+                <span className="min-w-[54px] text-center text-[8px] font-semibold uppercase tracking-[0.12em] text-[#8E92A4]">Shelf {shelfPage + 1}/{Math.ceil(shelfItems.length / ITEMS_PER_SHELF_PAGE)}</span>
+                <button type="button" disabled={shelfPage >= Math.ceil(shelfItems.length / ITEMS_PER_SHELF_PAGE) - 1} onClick={() => setShelfPage((page) => page + 1)} className="h-[22px] w-[22px] rounded-full bg-white/5 text-xs text-white disabled:opacity-25">›</button>
+              </div>
+            )}
 
             {/* Glassmorphism Search Pill */}
             <div
@@ -1798,7 +1841,7 @@ export default function WardenMainScreen() {
                   </div>
 
                   <div className="my-[8px] flex flex-col gap-[6px]">
-                    {(selectedMed.indication || []).map((bullet, idx) => (
+                    {(selectedMed.indication || []).slice(0, 2).map((bullet, idx) => (
                       <div
                         key={idx}
                         className="flex items-start gap-[6px] text-[10px] leading-[1.35] text-[#C1C6D7]"
@@ -1814,7 +1857,14 @@ export default function WardenMainScreen() {
                       <span className="text-[#8E92A4] text-[9.5px] uppercase tracking-wider font-semibold">Drop at:</span>
                       <select
                         value={orderDropLocation}
-                        onChange={(e) => setOrderDropLocation(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setOrderDropLocation(val);
+                          const matchedBed = beds.find((b) => val.startsWith(b.name));
+                          if (matchedBed) {
+                            setPharmacyContext(matchedBed);
+                          }
+                        }}
                         className="bg-[#0B0E14]/90 text-[#1ECCE6] border border-white/10 rounded-[6px] px-2 py-1 text-[10px] outline-none cursor-pointer max-w-[130px] truncate"
                       >
                         <option value={`Bed 3 (Floor ${currentFloor})`}>{`Bed 3 (Floor ${currentFloor})`}</option>
@@ -1828,6 +1878,12 @@ export default function WardenMainScreen() {
                       </select>
                     </div>
 
+                    {orderStatus.kind === 'error' && (
+                      <div className="truncate rounded-md border border-[#E61E67]/30 bg-[#E61E67]/10 px-[7px] py-[4px] text-[8px] text-[#FF9DB2]" title={orderStatus.message}>
+                        {orderStatus.message}
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between gap-2">
                       <button
                         type="button"
@@ -1836,14 +1892,15 @@ export default function WardenMainScreen() {
                           e.stopPropagation();
                           setOrderStatus({ kind: "ordering", message: "Dispatching order..." });
                           try {
+                            const targetBed = pharmacyContext || selectedBed;
                             const res = await fetch("/api/medications/order", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({
                                 medicationName: selectedMed.name,
                                 dropLocation: orderDropLocation,
-                                bedId: selectedBed?.id,
-                                patientId: selectedBed?.patientId,
+                                bedId: targetBed?.id,
+                                patientId: targetBed?.patientId,
                               }),
                             });
                             const result = await res.json();
@@ -1851,6 +1908,10 @@ export default function WardenMainScreen() {
                             setOrderStatus({
                               kind: "success",
                               message: `Ordered to ${orderDropLocation}`,
+                            });
+                            setBedAction({
+                              kind: "success",
+                              message: `${selectedMed.name} ordered to ${orderDropLocation}`,
                             });
                             setTimeout(() => {
                               setOrderStatus({ kind: "idle", message: "" });

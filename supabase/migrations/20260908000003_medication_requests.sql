@@ -1,5 +1,3 @@
--- Medication Requests canonical table and projection functions
-
 CREATE TABLE IF NOT EXISTS medication_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,

@@ -106,8 +106,9 @@ export async function GET(request: Request) {
     // so, for example, an occupied bed can also be discharging and awaiting transport.
     const dischargeMap: Record<string, any> = {};
     const transportMap: Record<string, any> = {};
+    const medicationMap: Record<string, any> = {};
     if (patientIds.length > 0) {
-      const [{ data: discharges }, { data: transports }] = await Promise.all([
+      const [{ data: discharges }, { data: transports }, { data: medicationRequests }] = await Promise.all([
         admin
           .from('discharge_plans')
           .select('*')
@@ -120,6 +121,12 @@ export async function GET(request: Request) {
           .in('patient_id', patientIds)
           .in('status', ['requested', 'dispatching', 'assigned', 'accepted', 'in_progress', 'cancellation_requested'])
           .order('created_at', { ascending: false }),
+        (admin as any)
+          .from('medication_requests')
+          .select('*, medication:medications(id, name, strength, form)')
+          .in('patient_id', patientIds)
+          .in('status', ['requested', 'preparing', 'ready'])
+          .order('requested_at', { ascending: false }),
       ]);
 
       (discharges || []).forEach((plan: any) => {
@@ -127,6 +134,9 @@ export async function GET(request: Request) {
       });
       (transports || []).forEach((transport: any) => {
         if (!transportMap[transport.patient_id]) transportMap[transport.patient_id] = transport;
+      });
+      (medicationRequests || []).forEach((medication: any) => {
+        if (!medicationMap[medication.patient_id]) medicationMap[medication.patient_id] = medication;
       });
     }
 
@@ -154,6 +164,7 @@ export async function GET(request: Request) {
       const vitals = pat ? vitalsMap[pat.id] : null;
       const discharge = pat ? dischargeMap[pat.id] : null;
       const transport = pat ? transportMap[pat.id] : null;
+      const medication = pat ? medicationMap[pat.id] : null;
       const ownedTask = bedTasks.find((task: any) => taskOwnerMap[task.id]);
       const taskOwner = ownedTask ? taskOwnerMap[ownedTask.id]?.staff : null;
       const transportOwner = transport?.assigned_staff;
@@ -190,6 +201,7 @@ export async function GET(request: Request) {
       const waitingCandidates = [
         cleaning?.requested_at,
         transport?.created_at,
+        medication?.requested_at,
         discharge?.planned_discharge_at,
         ...bedTasks.map((task: any) => task.created_at),
       ].filter(Boolean).map((value) => new Date(value).getTime()).filter(Number.isFinite);
@@ -227,6 +239,12 @@ export async function GET(request: Request) {
             transport: transport ? { id: transport.id, status: transport.status, requestedAt: transport.created_at } : null,
             discharge: discharge ? { id: discharge.id, status: discharge.status, plannedAt: discharge.planned_discharge_at } : null,
             reservation: b.status === 'reserved' ? { status: 'reserved' } : null,
+            medication: medication ? {
+              id: medication.id,
+              status: medication.status,
+              requestedAt: medication.requested_at,
+              name: medication.medication?.name,
+            } : null,
           },
           ownership: owner ? {
             id: owner.id,
