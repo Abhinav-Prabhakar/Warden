@@ -5,6 +5,9 @@ import Image from "next/image";
 import { ThinkingOrb } from "thinking-orbs";
 import { useVoiceAgent } from "@/lib/voice/useVoiceAgent";
 import { VoiceSettingsModal } from "@/app/components/VoiceSettingsModal";
+import { StaffDirectoryCard } from "@/app/components/StaffDirectoryCard";
+import { SatelliteRadioCard } from "@/app/components/SatelliteRadioCard";
+import { EnergyEfficiencyCard } from "@/app/components/EnergyEfficiencyCard";
 
 interface BedOverlay {
   id: string;
@@ -20,149 +23,113 @@ interface BedOverlay {
   isCleaningJob?: boolean;
 }
 
-const BED_RECTANGLES: BedOverlay[] = [
+interface BedGeometry {
+  slotId: string;
+  name: string;
+  leftPct: number;
+  topPct: number;
+  widthPct: number;
+  heightPct: number;
+}
+
+const BED_GEOMETRY: BedGeometry[] = [
   // Top Row (4 rooms with beds, left to right)
   {
-    id: "bed-top-1",
+    slotId: "bed-top-1",
     name: "Bed 1",
-    color: "green",
     leftPct: 14.55,
     topPct: 10.8,
     widthPct: 3.2,
     heightPct: 14.2,
-    patientName: "Meera Patel",
-    patientAgeGender: "36F",
-    statusText: "DOING WELL",
   },
   {
-    id: "bed-top-3",
+    slotId: "bed-top-3",
     name: "Bed 2",
-    color: "orange",
     leftPct: 49.9,
     topPct: 10.45,
     widthPct: 3.65,
     heightPct: 14.5,
-    patientName: "Terminal Disinfection",
-    patientAgeGender: "Facilities",
-    statusText: "TASK PENDING",
-    isCleaningJob: true,
   },
   {
-    id: "bed-top-4",
+    slotId: "bed-top-4",
     name: "Bed 3",
-    color: "red",
     leftPct: 68.16,
     topPct: 10.6,
     widthPct: 3.45,
     heightPct: 14.5,
-    patientName: "Vikram Malhotra",
-    patientAgeGender: "62M",
-    statusText: "DANGER / STAT",
   },
   {
-    id: "bed-top-5",
+    slotId: "bed-top-5",
     name: "Bed 4",
-    color: "orange",
     leftPct: 86.72,
     topPct: 10.6,
     widthPct: 3.45,
     heightPct: 14.5,
-    patientName: "Ramesh Gupta",
-    patientAgeGender: "54M",
-    statusText: "TASK PENDING",
   },
 
   // Bottom Row
   // Room 1 (bottom left)
   {
-    id: "bed-b1-h",
+    slotId: "bed-b1-h",
     name: "Bed 5",
-    color: "green",
     leftPct: 7.03,
     topPct: 67.5,
     widthPct: 8.2,
     heightPct: 6.2,
-    patientName: "Siddharth Sen",
-    patientAgeGender: "41M",
-    statusText: "DOING WELL",
   },
   {
-    id: "bed-b1-v",
+    slotId: "bed-b1-v",
     name: "Bed 6",
-    color: "green",
     leftPct: 9.3,
     topPct: 75.96,
     widthPct: 3.35,
     heightPct: 14.7,
-    patientName: "Sunita Reddy",
-    patientAgeGender: "29F",
-    statusText: "DOING WELL",
   },
 
   // Room 2 (bottom second)
   {
-    id: "bed-b2-h",
+    slotId: "bed-b2-h",
     name: "Bed 7",
-    color: "orange",
     leftPct: 18.5,
     topPct: 66.9,
     widthPct: 8.15,
     heightPct: 6.35,
-    patientName: "Ananya Rao",
-    patientAgeGender: "69F",
-    statusText: "TASK PENDING",
   },
   {
-    id: "bed-b2-v",
+    slotId: "bed-b2-v",
     name: "Bed 8",
-    color: "green",
     leftPct: 23.05,
     topPct: 76.13,
     widthPct: 3.32,
     heightPct: 14.7,
-    patientName: "Kavita Desai",
-    patientAgeGender: "45F",
-    statusText: "DOING WELL",
   },
 
   // Room 3 (bottom third)
   {
-    id: "bed-b3-v",
+    slotId: "bed-b3-v",
     name: "Bed 9",
-    color: "green",
     leftPct: 30.96,
     topPct: 76.13,
     widthPct: 3.32,
     heightPct: 14.7,
-    patientName: "Devansh Nair",
-    patientAgeGender: "51M",
-    statusText: "DOING WELL",
   },
 
   // Room 5 (bottom right room)
   {
-    id: "bed-b5-left",
+    slotId: "bed-b5-left",
     name: "Bed 10",
-    color: "orange",
     leftPct: 52.54,
     topPct: 75.8,
     widthPct: 3.75,
     heightPct: 14.7,
-    patientName: "Pooja Hegde",
-    patientAgeGender: "34F",
-    statusText: "TASK PENDING",
   },
   {
-    id: "bed-b5-right",
+    slotId: "bed-b5-right",
     name: "Bed 11",
-    color: "green",
     leftPct: 64.84,
     topPct: 75.6,
     widthPct: 3.25,
     heightPct: 14.7,
-    patientName: "Harish Iyer",
-    patientAgeGender: "58M",
-    statusText: "DOING WELL",
   },
 ];
 
@@ -342,83 +309,33 @@ interface ShelfItem {
   isBottleShape?: boolean;
 }
 
-const SHELF_ITEMS: ShelfItem[] = [
-  {
-    id: "cyan-box",
-    name: "Cetirizine 10mg",
-    category: "Allergy Relief",
-    indication: [
-      "Relieves seasonal allergy symptoms",
-      "Fast acting non-drowsy formulation",
-      "Treats itchy eyes and runny nose",
-    ],
-    colorType: "cyan",
-    leftPct: 19.63,
-    topPct: 35.89,
-    widthPct: 3.61,
-    heightPct: 8.5,
-  },
-  {
-    id: "magenta-bottle",
-    name: "Benadryl",
-    category: "Cough & Cold",
-    indication: [
-      "Loosens thick mucus, relieves chest congestion",
-      "Calms throat irritation, persistent coughs",
-      "Relieves runny nose, sneezing, watery eyes",
-    ],
-    colorType: "magenta",
-    leftPct: 37.3,
-    topPct: 51.56,
-    widthPct: 2.73,
-    heightPct: 8.5,
-    isBottleShape: true,
-  },
-  {
-    id: "orange-box",
-    name: "Ibuprofen 400mg",
-    category: "Anti-Inflammatory",
-    indication: [
-      "Provides relief from acute pain and fever",
-      "Reduces joint inflammation & swelling",
-      "Prescribed post-op analgesic support",
-    ],
-    colorType: "orange",
-    leftPct: 56.93,
-    topPct: 52.0,
-    widthPct: 4.3,
-    heightPct: 2.34,
-  },
-  {
-    id: "green-box",
-    name: "Amoxicillin 500mg",
-    category: "Antibiotics",
-    indication: [
-      "Broad-spectrum bacterial infection control",
-      "Respiratory and urinary tract treatment",
-      "Completed course verification required",
-    ],
-    colorType: "green",
-    leftPct: 11.82,
-    topPct: 81.3,
-    widthPct: 4.88,
-    heightPct: 7.76,
-  },
-];
+const AVAILABLE_FLOORS = [4, 5, 6, 7, 8];
 
 export default function WardenMainScreen() {
   const [activeScreen, setActiveScreen] = useState<0 | 1 | 2>(0);
-  const [selectedBed, setSelectedBed] = useState<BedOverlay>(
-    BED_RECTANGLES.find((b) => b.id === "bed-top-4") || BED_RECTANGLES[2]
-  );
-  const [selectedMed, setSelectedMed] = useState<ShelfItem>(SHELF_ITEMS[1]); // Benadryl default
+  const [currentFloor, setCurrentFloor] = useState<number>(7);
+  const [isStaffOpen, setIsStaffOpen] = useState<boolean>(false);
+  const [isRadioOpen, setIsRadioOpen] = useState<boolean>(false);
+  const [isEfficiencyOpen, setIsEfficiencyOpen] = useState<boolean>(false);
+
+  // Live Beds state from Supabase
+  const [beds, setBeds] = useState<BedOverlay[]>([]);
+  const [bedsLoading, setBedsLoading] = useState<boolean>(true);
+  const [bedsError, setBedsError] = useState<string | null>(null);
+  const [selectedBed, setSelectedBed] = useState<BedOverlay | null>(null);
+
+  // Live Pharmacy items state from Supabase
+  const [shelfItems, setShelfItems] = useState<ShelfItem[]>([]);
+  const [shelfLoading, setShelfLoading] = useState<boolean>(true);
+  const [shelfError, setShelfError] = useState<string | null>(null);
+  const [selectedMed, setSelectedMed] = useState<ShelfItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Live Supabase bed drilldown state — keyed by bed name so stale
   // results from a previous selection are ignored while a new one loads
   const [drilldown, setDrilldown] = useState<{ bedName: string; data: BedDrilldown } | null>(null);
   const [settledBed, setSettledBed] = useState<string | null>(null);
-  const isLoadingDrilldown = settledBed !== selectedBed.name;
+  const isLoadingDrilldown = Boolean(selectedBed && settledBed !== selectedBed.name);
 
   // Modular Voice Agent Hook
   const {
@@ -445,10 +362,90 @@ export default function WardenMainScreen() {
   const mouseStartXRef = useRef<number | null>(null);
   const isMouseDownRef = useRef<boolean>(false);
 
-  // Fetch detailed clinical drilldown from Supabase whenever selectedBed changes
+  // 1. Fetch live beds from Supabase whenever floor changes
+  useEffect(() => {
+    setBedsLoading(true);
+    setBedsError(null);
+    fetch(`/api/beds?floor=${currentFloor}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (data && !data.error && Array.isArray(data.beds)) {
+          const mapped: BedOverlay[] = data.beds.slice(0, BED_GEOMETRY.length).map((b: any, idx: number) => {
+            const geom = BED_GEOMETRY[idx] || BED_GEOMETRY[0];
+            const pat = b.patient;
+            const age = pat?.date_of_birth ? calcAge(pat.date_of_birth) : null;
+            const patientAgeGender = pat
+              ? `${pat.sex === 'male' || pat.sex === 'M' ? 'M' : pat.sex === 'female' || pat.sex === 'F' ? 'F' : pat.sex || '—'}, ${age ? `${age}y` : '—'}`
+              : 'Unassigned';
+            const patientName = pat ? `${pat.first_name || ''} ${pat.last_name || ''}`.trim() : 'Vacant Bed';
+
+            return {
+              id: b.id,
+              name: `Bed ${b.bed_number || idx + 1}`,
+              color: b.color,
+              leftPct: geom.leftPct,
+              topPct: geom.topPct,
+              widthPct: geom.widthPct,
+              heightPct: geom.heightPct,
+              patientName,
+              patientAgeGender,
+              statusText: b.statusText,
+              isCleaningJob: b.isCleaningJob,
+            };
+          });
+          setBeds(mapped);
+          setSelectedBed((prev) => {
+            if (prev) {
+              const matched = mapped.find((m) => m.name === prev.name);
+              if (matched) return matched;
+            }
+            return mapped.find((m) => m.name === "Bed 3") || mapped[0] || null;
+          });
+        } else {
+          setBedsError(data?.error || "Failed to load floor beds");
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load beds:", err);
+        setBedsError("Live database connection unavailable for beds");
+      })
+      .finally(() => setBedsLoading(false));
+  }, [currentFloor]);
+
+  // 2. Fetch live pharmacy items from Supabase on mount
+  useEffect(() => {
+    setShelfLoading(true);
+    setShelfError(null);
+    fetch("/api/pharmacy")
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (data && !data.error && Array.isArray(data.items)) {
+          setShelfItems(data.items);
+          if (data.items.length > 0) {
+            const benadryl = data.items.find((i: ShelfItem) => i.name.toLowerCase().includes("benadryl"));
+            setSelectedMed(benadryl || data.items[0]);
+          }
+        } else {
+          setShelfError(data?.error || "Failed to load pharmacy items");
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load pharmacy items:", err);
+        setShelfError("Live database connection unavailable for pharmacy");
+      })
+      .finally(() => setShelfLoading(false));
+  }, []);
+
+  // 3. Fetch detailed clinical drilldown from Supabase whenever selectedBed or floor changes
   useEffect(() => {
     if (!selectedBed) return;
-    fetch(`/api/beds/${encodeURIComponent(selectedBed.name)}`)
+    fetch(`/api/beds/${encodeURIComponent(selectedBed.name)}?floor=${currentFloor}`)
       .then((res) => res.json())
       .then((data: BedDrilldown) => {
         if (data && !(data as { error?: string }).error) {
@@ -457,7 +454,7 @@ export default function WardenMainScreen() {
       })
       .catch((err) => console.warn("Failed to fetch bed drilldown", err))
       .finally(() => setSettledBed(selectedBed.name));
-  }, [selectedBed]);
+  }, [selectedBed, currentFloor]);
 
   // Keyboard navigation between screens (Arrow keys)
   useEffect(() => {
@@ -532,17 +529,17 @@ export default function WardenMainScreen() {
   const handleMouseLeave = () => { if (isDragging) handleDragEnd(); };
 
   // Derived drilldown data values (stale results from another bed are ignored)
-  const drilldownData = drilldown?.bedName === selectedBed.name ? drilldown.data : null;
+  const drilldownData = selectedBed && drilldown?.bedName === selectedBed.name ? drilldown.data : null;
   const patientRecord = drilldownData?.bed?.patient;
   const latestVitals = drilldownData?.vitals?.[0];
-  const bedStatus = drilldownData?.bed?.status || selectedBed.statusText?.toLowerCase() || "occupied";
-  const isCritical = patientRecord?.acuity === "critical" || selectedBed.color === "red" || (latestVitals?.heart_rate && latestVitals.heart_rate > 110);
-  const isCleaning = bedStatus === "cleaning" || selectedBed.isCleaningJob === true;
-  const isBlocked = bedStatus === "blocked" || selectedBed.statusText === "BLOCKED";
+  const bedStatus = drilldownData?.bed?.status || selectedBed?.statusText?.toLowerCase() || "occupied";
+  const isCritical = patientRecord?.acuity === "critical" || selectedBed?.color === "red" || Boolean(latestVitals?.heart_rate && latestVitals.heart_rate > 110);
+  const isCleaning = bedStatus === "cleaning" || selectedBed?.isCleaningJob === true;
+  const isBlocked = bedStatus === "blocked" || selectedBed?.statusText === "BLOCKED";
   const isOccupied = !!patientRecord || (!isCleaning && bedStatus !== "available");
 
   const activeTask = drilldownData?.tasks?.[0];
-  const hasTask = Boolean(activeTask && activeTask.status !== "completed") || selectedBed.color === "orange";
+  const hasTask = Boolean(activeTask && activeTask.status !== "completed") || selectedBed?.color === "orange";
 
   // One tone per bed drives the pill, ambient glow, waveform and notice
   const cardTone: CardTone = isCritical ? "danger" : hasTask || isBlocked || isCleaning ? "task" : "well";
@@ -551,17 +548,17 @@ export default function WardenMainScreen() {
     ? "DANGER / STAT"
     : !isOccupied && !isCleaning
     ? "BED READY"
-    : hasTask || isBlocked || isCleaning || selectedBed.color === "orange"
+    : hasTask || isBlocked || isCleaning || selectedBed?.color === "orange"
     ? "TASK PENDING"
     : "DOING WELL";
 
   const patientAge = calcAge(patientRecord?.date_of_birth);
   const patientAgeGender = patientAge != null
     ? `${patientAge}${(patientRecord?.sex || "U").toUpperCase().slice(0, 1)}`
-    : selectedBed.patientAgeGender || patientRecord?.sex || "";
+    : selectedBed?.patientAgeGender || patientRecord?.sex || "";
   const patientFullName = patientRecord
     ? `${patientRecord.first_name} ${patientRecord.last_name}`
-    : selectedBed.patientName;
+    : selectedBed?.patientName || "Bed Status";
   const patientMRN = patientRecord?.medical_record_number || "MRN-2004";
   const patientBlood = patientRecord?.blood_type || "B+";
   const patientCondition = drilldownData?.bed?.patient?.patient_conditions?.[0]?.name || "Acute Observation";
@@ -569,7 +566,7 @@ export default function WardenMainScreen() {
 
   const roomLabel = drilldownData?.bed?.room
     ? `Room ${drilldownData.bed.room.room_number} · Floor ${drilldownData.bed.room.floor_number}`
-    : "General Ward · Floor 7";
+    : `General Ward · Floor ${currentFloor}`;
 
   const vitalsHR = latestVitals?.heart_rate || (isCritical ? 118 : 78);
   const vitalsSpO2 = latestVitals?.spo2 || (isCritical ? 90 : 98);
@@ -662,9 +659,45 @@ export default function WardenMainScreen() {
           {activeScreen === 0 ? "General Ward" : activeScreen === 1 ? "Pharmacy" : "Diagnostics"}
         </div>
 
-        {/* Right Label */}
-        <div className="text-[#8E92A4] text-[12px] font-medium tracking-[0.06em]">
-          {activeScreen === 0 ? "Floor 7" : ""}
+        {/* Right Label with Floor Chevrons */}
+        <div className="flex items-center gap-1.5 text-[#8E92A4] text-[12px] font-medium tracking-[0.06em] pointer-events-auto">
+          {activeScreen === 0 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const currIdx = AVAILABLE_FLOORS.indexOf(currentFloor);
+                  const prevIdx = (currIdx - 1 + AVAILABLE_FLOORS.length) % AVAILABLE_FLOORS.length;
+                  setCurrentFloor(AVAILABLE_FLOORS[prevIdx]);
+                }}
+                className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-[#8E92A4] hover:text-white transition-all cursor-pointer"
+                title="Previous Floor"
+                aria-label="Previous Floor"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+              <span className="select-none min-w-[50px] text-center">Floor {currentFloor}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const currIdx = AVAILABLE_FLOORS.indexOf(currentFloor);
+                  const nextIdx = (currIdx + 1) % AVAILABLE_FLOORS.length;
+                  setCurrentFloor(AVAILABLE_FLOORS[nextIdx]);
+                }}
+                className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-[#8E92A4] hover:text-white transition-all cursor-pointer"
+                title="Next Floor"
+                aria-label="Next Floor"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
+            </>
+          ) : (
+            ""
+          )}
         </div>
       </header>
 
@@ -692,9 +725,22 @@ export default function WardenMainScreen() {
               />
             </div>
 
+            {/* Live Beds Loading Indicator */}
+            {bedsLoading && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 figma-glass-card rounded-full px-4 py-1.5 text-xs text-[#8E92A4] flex items-center gap-2 pointer-events-none">
+                <span className="inline-block w-2 h-2 rounded-full bg-[#1ECCE6] animate-ping" />
+                <span>Loading Floor {currentFloor} live data...</span>
+              </div>
+            )}
+            {bedsError && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-red-950/80 border border-red-500/40 rounded-full px-4 py-1.5 text-xs text-red-200 flex items-center gap-2 pointer-events-none">
+                <span>⚠️ {bedsError}</span>
+              </div>
+            )}
+
             {/* Glowing Rectangles on Top of Beds */}
-            {BED_RECTANGLES.map((bed) => {
-              const isSelected = selectedBed.id === bed.id;
+            {beds.map((bed) => {
+              const isSelected = selectedBed?.id === bed.id;
               const glowClass =
                 bed.color === "green"
                   ? "bed-glow-green"
@@ -720,54 +766,122 @@ export default function WardenMainScreen() {
                     width: `${bed.widthPct}%`,
                     height: `${bed.heightPct}%`,
                   }}
-                  title={`${bed.name} (${bed.color.toUpperCase()})`}
+                  title={`${bed.name} (${bed.color.toUpperCase()} - ${bed.statusText})`}
                 />
               );
             })}
 
-            {/* Bed 2 Room Label in Top Room 3 */}
-            <div
-              className="absolute z-10 pointer-events-none"
-              style={{
-                left: "46.2%",
-                top: "31.0%",
-              }}
-            >
-              <div className="text-[#E2E5EE] text-[13px] font-semibold tracking-[-0.01em] leading-none">
-                Bed 2
-              </div>
-              <div className="text-[#8B91A0] text-[9.5px] font-medium tracking-[0.08em] uppercase mt-[4px] leading-none">
-                CLEANING
-              </div>
-            </div>
+            {/* Bed 2 Dynamic Room Label in Top Room 3 */}
+            {(() => {
+              const bed2 = beds.find((b) => b.name === "Bed 2");
+              if (!bed2) return null;
+              return (
+                <div
+                  className="absolute z-10 pointer-events-none"
+                  style={{
+                    left: "46.2%",
+                    top: "31.0%",
+                  }}
+                >
+                  <div className="text-[#E2E5EE] text-[13px] font-semibold tracking-[-0.01em] leading-none">
+                    {bed2.name}
+                  </div>
+                  <div className="text-[#8B91A0] text-[9.5px] font-medium tracking-[0.08em] uppercase mt-[4px] leading-none">
+                    {bed2.statusText}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Left Vertical Icon Bar (Bottom Left) */}
             <aside className="absolute left-[16px] bottom-[34px] z-20 flex flex-col items-center gap-[18px]">
+              {/* Satellite / Inter-Warden Radio */}
               <button
-                aria-label="Satellite status"
-                className="w-[18px] h-[18px] opacity-45 hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                aria-label="Inter-Warden Radio & Dispatches"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsRadioOpen((prev) => !prev);
+                  setIsStaffOpen(false);
+                  setIsEfficiencyOpen(false);
+                }}
+                className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
+                  isRadioOpen
+                    ? "opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(30,204,230,0.8)]"
+                    : "opacity-45 hover:opacity-100"
+                }`}
+                title="Inter-Warden Radio & Dispatches"
               >
-                <Image src="/satellite.svg" alt="Satellite" width={18} height={18} />
+                <Image src="/satellite.svg" alt="Satellite Radio" width={18} height={18} />
               </button>
+
+              {/* Fingerprint / Staff Directory */}
               <button
-                aria-label="Biometrics"
-                className="w-[18px] h-[18px] opacity-45 hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                aria-label="Biometrics & Staff Directory"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsStaffOpen((prev) => !prev);
+                  setIsRadioOpen(false);
+                  setIsEfficiencyOpen(false);
+                }}
+                className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
+                  isStaffOpen
+                    ? "opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(30,204,230,0.8)]"
+                    : "opacity-45 hover:opacity-100"
+                }`}
+                title="Staff Directory"
               >
                 <Image src="/fingerprint.svg" alt="Biometrics" width={18} height={18} />
               </button>
+
+              {/* Leaf / Efficiency & Power Automation Deck */}
               <button
-                aria-label="Environment"
-                className="w-[18px] h-[18px] opacity-45 hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                aria-label="Efficiency & Power Automation Deck"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsEfficiencyOpen((prev) => !prev);
+                  setIsRadioOpen(false);
+                  setIsStaffOpen(false);
+                }}
+                className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
+                  isEfficiencyOpen
+                    ? "opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(36,169,81,0.8)]"
+                    : "opacity-45 hover:opacity-100"
+                }`}
+                title="Efficiency & Power Consumption"
               >
-                <Image src="/leaf.svg" alt="Environment" width={18} height={18} />
+                <Image src="/leaf.svg" alt="Efficiency" width={18} height={18} />
               </button>
+
+              {/* Telephone */}
               <button
                 aria-label="Telephone"
                 className="w-[18px] h-[18px] opacity-45 hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                title="Telephone Comms"
               >
                 <Image src="/phone.svg" alt="Phone" width={18} height={18} />
               </button>
             </aside>
+
+            {/* Inter-Warden Radio Glass Card */}
+            <SatelliteRadioCard
+              isOpen={isRadioOpen}
+              onClose={() => setIsRadioOpen(false)}
+              currentFloor={currentFloor}
+            />
+
+            {/* Staff Directory Glass Card */}
+            <StaffDirectoryCard
+              isOpen={isStaffOpen}
+              onClose={() => setIsStaffOpen(false)}
+            />
+
+            {/* Efficiency & Power Consumption Glass Card */}
+            <EnergyEfficiencyCard
+              isOpen={isEfficiencyOpen}
+              onClose={() => setIsEfficiencyOpen(false)}
+              currentFloor={currentFloor}
+              onSelectFloor={(fl) => setCurrentFloor(fl)}
+            />
 
             {/* =============================================================
                 BOTTOM RIGHT GLASSMORPHIC CLINICAL OPERATIONS CARD
@@ -792,14 +906,15 @@ export default function WardenMainScreen() {
                 }}
               />
 
-              <div key={selectedBed.id} className="card-content-enter relative flex flex-col gap-[9px]">
-                {/* Header overline — bed · room · floor + status pill */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-baseline gap-[6px] min-w-0 text-[10px] font-medium uppercase tracking-[0.14em]">
-                    <span className="font-bold text-[#C6CBD9] whitespace-nowrap">{selectedBed.name}</span>
-                    <span className="text-[#565B6B]">·</span>
-                    <span className="text-[#8E92A4] truncate">{roomLabel}</span>
-                  </div>
+              {selectedBed ? (
+                <div key={selectedBed.id} className="card-content-enter relative flex flex-col gap-[9px]">
+                  {/* Header overline — bed · room · floor + status pill */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-baseline gap-[6px] min-w-0 text-[10px] font-medium uppercase tracking-[0.14em]">
+                      <span className="font-bold text-[#C6CBD9] whitespace-nowrap">{selectedBed.name}</span>
+                      <span className="text-[#565B6B]">·</span>
+                      <span className="text-[#8E92A4] truncate">{roomLabel}</span>
+                    </div>
                   <span
                     className="shrink-0 flex items-center gap-[5px] pl-[8px] pr-[9px] py-[3px] rounded-full border"
                     style={{
@@ -1029,7 +1144,7 @@ export default function WardenMainScreen() {
                     <button
                       type="button"
                       onClick={() => {
-                        alert(`Printing clinical discharge paperwork for ${selectedBed.name}`);
+                        if (selectedBed) alert(`Printing clinical discharge paperwork for ${selectedBed.name}`);
                       }}
                       className="flex items-center gap-[5px] px-[10px] h-[28px] rounded-[8px] bg-white/[0.06] hover:bg-white/[0.12] active:scale-[0.97] border border-white/10 hover:border-white/20 text-[10.5px] font-medium text-[#C9CEDC] transition-all"
                       title="Print Summary"
@@ -1044,6 +1159,11 @@ export default function WardenMainScreen() {
                   </div>
                 </div>
               </div>
+              ) : (
+                <div className="card-content-enter relative flex flex-col items-center justify-center py-20 text-[#8E92A4] text-xs">
+                  <span>Select a bed to view live clinical telemetry</span>
+                </div>
+              )}
 
               {/* ThinkingOrb Anchored on Bottom-Right Corner with Voice State Reactivity & 5s Long-Press */}
               <div
@@ -1116,45 +1236,65 @@ export default function WardenMainScreen() {
               />
             </div>
 
-            {/* Highlighted Shelf Items */}
-            {SHELF_ITEMS.map((item) => {
-              const isSelected = selectedMed.id === item.id;
-              const glowClass =
-                item.colorType === "cyan"
-                  ? "shelf-glow-cyan"
-                  : item.colorType === "green"
-                  ? "shelf-glow-green"
-                  : item.colorType === "orange"
-                  ? "shelf-glow-orange"
-                  : "shelf-glow-magenta";
+            {/* Live Pharmacy Loading / Error Indicators */}
+            {shelfLoading && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 figma-glass-card rounded-full px-4 py-1.5 text-xs text-[#8E92A4] flex items-center gap-2 pointer-events-none">
+                <span className="inline-block w-2 h-2 rounded-full bg-[#1ECCE6] animate-ping" />
+                <span>Loading live pharmacy catalog...</span>
+              </div>
+            )}
+            {shelfError && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-red-950/80 border border-red-500/40 rounded-full px-4 py-1.5 text-xs text-red-200 flex items-center gap-2 pointer-events-none">
+                <span>⚠️ {shelfError}</span>
+              </div>
+            )}
 
-              return (
-                <div
-                  key={item.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedMed(item);
-                  }}
-                  className={`absolute cursor-pointer transition-transform duration-200 z-10 ${glowClass} ${
-                    item.isBottleShape ? "rounded-[5px]" : "rounded-[3px]"
-                  } ${
-                    isSelected
-                      ? "scale-[1.02] ring-1 ring-white/30"
-                      : "hover:scale-[1.02]"
-                  }`}
-                  style={{
-                    left: `${item.leftPct}%`,
-                    top: `${item.topPct}%`,
-                    width: `${item.widthPct}%`,
-                    height: `${item.heightPct}%`,
-                    ...(item.isBottleShape && {
-                      borderRadius: "6px 6px 4px 4px",
-                    }),
-                  }}
-                  title={item.name}
-                />
-              );
-            })}
+            {/* Highlighted Shelf Items */}
+            {shelfItems
+              .filter((item) =>
+                searchQuery
+                  ? item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    item.category.toLowerCase().includes(searchQuery.toLowerCase())
+                  : true
+              )
+              .map((item) => {
+                const isSelected = selectedMed?.id === item.id;
+                const glowClass =
+                  item.colorType === "cyan"
+                    ? "shelf-glow-cyan"
+                    : item.colorType === "green"
+                    ? "shelf-glow-green"
+                    : item.colorType === "orange"
+                    ? "shelf-glow-orange"
+                    : "shelf-glow-magenta";
+
+                return (
+                  <div
+                    key={item.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMed(item);
+                    }}
+                    className={`absolute cursor-pointer transition-transform duration-200 z-10 ${glowClass} ${
+                      item.isBottleShape ? "rounded-[5px]" : "rounded-[3px]"
+                    } ${
+                      isSelected
+                        ? "scale-[1.02] ring-1 ring-white/30"
+                        : "hover:scale-[1.02]"
+                    }`}
+                    style={{
+                      left: `${item.leftPct}%`,
+                      top: `${item.topPct}%`,
+                      width: `${item.widthPct}%`,
+                      height: `${item.heightPct}%`,
+                      ...(item.isBottleShape && {
+                        borderRadius: "6px 6px 4px 4px",
+                      }),
+                    }}
+                    title={item.name}
+                  />
+                );
+              })}
 
             {/* Benadryl Floating Text Label */}
             <div
@@ -1206,32 +1346,40 @@ export default function WardenMainScreen() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex flex-col">
-                <h2 className="text-white text-[19px] font-semibold tracking-[-0.02em] leading-tight">
-                  {selectedMed.name}
-                </h2>
-                <span className="text-[#9BA1B2] text-[11px] font-normal mt-[3px]">
-                  {selectedMed.category}
-                </span>
-              </div>
-
-              <div className="my-[8px] flex flex-col gap-[6px]">
-                {selectedMed.indication.map((bullet, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-start gap-[6px] text-[10px] leading-[1.35] text-[#C1C6D7]"
-                  >
-                    <span className="text-[#717688] mt-[-1px] font-bold">•</span>
-                    <span>{bullet}</span>
+              {selectedMed ? (
+                <>
+                  <div className="flex flex-col">
+                    <h2 className="text-white text-[19px] font-semibold tracking-[-0.02em] leading-tight">
+                      {selectedMed.name}
+                    </h2>
+                    <span className="text-[#9BA1B2] text-[11px] font-normal mt-[3px]">
+                      {selectedMed.category}
+                    </span>
                   </div>
-                ))}
-              </div>
 
-              <div className="relative pt-1">
-                <div className="w-[78px] h-[24px] rounded-[6px] border border-white/10 bg-white/[0.03] flex items-center justify-center opacity-40">
-                  <div className="w-[32px] h-[2.5px] bg-white/30 rounded-full" />
+                  <div className="my-[8px] flex flex-col gap-[6px]">
+                    {(selectedMed.indication || []).map((bullet, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-[6px] text-[10px] leading-[1.35] text-[#C1C6D7]"
+                      >
+                        <span className="text-[#717688] mt-[-1px] font-bold">•</span>
+                        <span>{bullet}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="relative pt-1">
+                    <div className="w-[78px] h-[24px] rounded-[6px] border border-white/10 bg-white/[0.03] flex items-center justify-center opacity-40">
+                      <div className="w-[32px] h-[2.5px] bg-white/30 rounded-full" />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-full text-xs text-[#8E92A4]">
+                  <span>Select a medication from shelf</span>
                 </div>
-              </div>
+              )}
 
               {/* ThinkingOrb on bottom right */}
               <div
