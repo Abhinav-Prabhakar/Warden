@@ -6,7 +6,7 @@
 
 ## 1. What Warden Is & Product Purpose
 
-Warden is an intelligent operational coordination layer designed specifically for **night-shift ward coordinators and charge nurses**. Working alone or with minimal staff at 2 AM in an acute hospital ward is a high-cognitive-load, rapidly mutating environment. 
+Warden is an intelligent operational coordination layer designed specifically for **night-shift ward coordinators and charge nurses**. Working alone or with minimal staff at 2 AM in an acute hospital ward is a high-cognitive-load, rapidly mutating environment.
 
 ### What Warden IS:
 - A live operational coordination layer
@@ -23,155 +23,100 @@ Warden is an intelligent operational coordination layer designed specifically fo
 
 ---
 
-## 2. Core Architectural & Operational Principles
+## 2. In-Browser API Key Management (Zero `.env` for Voice & LLM APIs)
 
-1. **Rule 1 — Freshness Beats History:** The current ward state beats the state from five seconds ago.
-2. **Rule 2 — Self-Invalidating Answers:** Warden must *never* blindly continue speaking information that has become obsolete. If underlying mutable state changes mid-sentence, Warden stops, reconsiders, and updates the answer.
-3. **Rule 3 — Ground Truth Action Execution:** Never claim an action occurred unless the underlying database/service operation actually succeeded.
-4. **Rule 4 — Explain "Why" and "What Next":** Don't just report that a bed or task is blocked—trace the dependency chain and explain *why* and what concrete action can unblock it.
-5. **Rule 5 — Closed-Loop Accountability:** Tasks are not complete merely because someone was asked to do them. Track the lifecycle: `requested` → `assigned` → `acknowledged` → `in progress` → `completed` / `verified`.
-6. **Rule 6 — Blocker Propagation Awareness:** A blocker at one step (e.g. physician discharge signature) propagates downstream through pharmacy, cloud printing, transport, and bed turnover.
-7. **Rule 7 — Append-Only Operational Memory:** Record state transitions in event streams (`patient_events`, `system_events`, `task_events`, `warden_actions`) rather than attempting to derive history from mutable current-state columns.
-8. **Rule 8 — Interruptibility:** Conversations are interruptible and correctable at any turn without losing context.
-9. **Rule 9 — Cognitive Load Reduction:** Provide concise, high-signal operational briefings rather than exhaustive data dumps.
-10. **Rule 10 — Safety & Clinician Primacy:** Never fabricate clinical observations, override clinicians, or silently resolve ambiguous situations with clinical risk.
+Warden is designed to be configured entirely in the browser without needing `.env` files for third-party AI APIs:
 
----
-
-## 3. Database Architecture & Authority
-
-The database is built on **Supabase / PostgreSQL**, adhering strictly to `Database Schema.md`.
-
-### 12 Database Domains (65 Tables & Views):
-1. **Organization:** `hospitals`, `departments`, `wards`
-2. **Physical Facility & Navigation:** `rooms`, `beds`, `navigation_nodes`, `navigation_edges`
-3. **People & Shifts:** `staff`, `staff_shifts`, `staff_skills`, `staff_locations`, `staff_current_locations`
-4. **Patients & Contacts:** `patients`, `contacts`, `patient_contacts`, `patient_conditions`, `patient_allergies`, `patient_preferences`
-5. **Clinical State:** `vitals` (time-series), `medications`, `patient_medications`, `medication_administrations`, `lab_orders`, `lab_results`, `procedures`
-6. **Movement & Turnover:** `bed_assignments`, `patient_transfers`, `discharge_plans`, `cleaning_jobs`
-7. **Tasks & Dependencies:** `tasks`, `task_assignments`, `task_dependencies`, `task_events`
-8. **Resources & Inventory:** `resource_types`, `resources`, `resource_assignments`, `inventory_items`, `inventory_transactions`
-9. **Transport & Escorts:** `transport_resources`, `transport_requests`, `transport_events`
-10. **Communication & Escalation:** `communication_contacts`, `communication_attempts`, `escalations`, `escalation_steps`, `notifications`
-11. **Queues & Automation:** `dispatch_queue`, `printers`, `print_jobs`, `notification_queue`, `automation_jobs`
-12. **Audit, Realtime & Memory:** `patient_events`, `system_events`, `warden_sessions`, `warden_actions`, `voice_interactions`, `feedback_requests`, `feedback_responses`, `call_tasks`, `system_alerts`
-13. **High-Performance Views:** `patient_current_state` (realtime operational snapshot per bed/patient)
-
-### Database Triggers & Automations:
-- `sync_bed_on_assignment`: Automatically syncs `beds.current_patient_id` and sets status to `occupied` on bed assignment. When released, automatically sets status to `cleaning` and creates an operational `cleaning_jobs` ticket.
-- `sync_bed_on_cleaning_complete`: Automatically marks `beds.status = 'available'` when the associated housekeeping cleaning job completes, emitting a `bed_cleaned` system event.
-- Realtime publication on core tables: `beds`, `tasks`, `task_assignments`, `patient_events`, `system_events`, `print_jobs`, `system_alerts`, `cleaning_jobs`, `transport_requests`, `escalations`.
+1. **5-Second Long-Press Settings Dialog:** Click and hold the ThinkingOrb for 5 seconds to open the `VoiceSettingsModal`.
+2. **Supported API Providers:**
+   - **TTS Providers:** Fish Audio (default `s2.1-pro-free` with SSE streaming), Rime AI (`mistv2`), OpenAI TTS, and Browser Speech.
+   - **LLM Providers:** Groq (`llama-3.3-70b-versatile`), OpenAI.
+   - **STT Providers:** Web Speech API, Groq Whisper Turbo, OpenAI Whisper.
+   - **LiveKit Credentials:** LiveKit WebSocket URL, API Key, and API Secret.
+3. **LocalStorage Persistence:** All entered credentials are saved to browser `localStorage` (`warden_api_keys` and `warden_voice_config`), overriding environment variables and dispatched via client headers and payloads directly to `/api/voice/chat` and `/api/voice/tts`.
 
 ---
 
-## 4. Backend Service Layer (`lib/services/`)
+## 3. Interactive UI & Floor Plan Navigation
 
-Decoupled from frontend UI components as specified in Section 62:
+The main interface is built with Next.js 16 (Turbopack) and Tailwind CSS, adhering strictly to Figma glassmorphism design standards (`figma-glass-card`, Urbanist font):
 
-- **`WardService` (`lib/services/ward-service.ts`)**:
-  - `getWardLiveState`: Aggregates the central operational model across beds, occupants, time-series vitals, on-duty staff, active alerts, and metrics.
-  - `getWhatChanged`: Temporal query engine comparing event streams against a reference timestamp (e.g., "since 1 AM" or "since going on break").
-  - `getBedDrilldown`: Full drilldown for individual beds/patients including timeline events, care team, conditions, and discharge roadmap.
-
-- **`TaskService` (`lib/services/task-service.ts`)**:
-  - `createTask`: Natural language and structured operational task creation with priority, urgency, and dependencies.
-  - `assignTask`: Closed-loop assignment tracking worker eligibility, availability, and assignment history.
-  - `updateTaskStatus`: Multi-state transitions (`acknowledged`, `in_progress`, `completed`, `declined`, `cancelled`).
-  - `traceTaskBlockers`: Traces unresolved upstream task dependencies.
-
-- **`BedService` (`lib/services/bed-service.ts`)**:
-  - `updateBedStatus`: Deterministic state machine transitions (`available`, `occupied`, `reserved`, `cleaning`, `maintenance`, `blocked`).
-  - `assignPatientToBed` & `releaseBed`: Bed lifecycle management with automated cleaning triggers.
-  - `traceBedBlockers`: Deep blocker chain inspection walking through uncompleted doctor clearance, pharmacy dispensing, cloud print jobs, and housekeeping cleaning.
-
-- **`PrintService` (`lib/services/print-service.ts`)**:
-  - Cloud printer queue manager with automated duplicate detection (prevents double-printing identical documents within 2 minutes).
-  - Queue prioritization, position tracking, failure handling, retry, and cancellation.
-
-- **`IntelligenceService` (`lib/services/intelligence-service.ts`)**:
-  - `evaluateSelfInvalidation`: Compares entity states between query time and response execution time. Returns spoken corrections when state changes.
-  - `detectBottlenecks`: Predicts bottlenecks across printer queues, bed capacity shortages, transport queues, and low clinical supplies.
-  - `detectContradictions`: Detects conflicting state (e.g. bed available with patient assigned, discharged patient occupying bed).
-  - `getPrioritizedNextActions`: Dynamically ranks operational tasks ("What should I do next?").
-  - `generateShiftHandoff`: Generates a structured shift handoff covering critical watch lists, pending discharges, and unresolved tasks.
-
-- **`OrchestratorService` (`lib/services/orchestrator-service.ts`)**:
-  - Multi-step operational workflows: Bed preparation for incoming patients, complete discharge execution, and transport coordination.
-
-- **`SimulationService` (`lib/services/simulation-service.ts`)**:
-  - Simulates rapid patient deterioration, staff becoming unavailable, printer paper jams, and cleaning completions for realistic live demonstration.
+- **Full-Viewport Screen Swiping:** Drag or swipe horizontally on the background to navigate between operational screens:
+  - **Screen 1 (General Ward):** 3D floor plan with 11 interactive bed overlays, status glows, Bed 2 room label, and quick icon toolbar.
+  - **Screen 2 (Pharmacy Medicine Shelf):** 3D pharmacy shelving with downward light fixtures and 4 highlighted medication categories (Cetirizine, Benadryl, Ibuprofen, Amoxicillin) with clinical indications.
+  - **Screen 3 (Diagnostics & Telemetry):** Ward telemetry and diagnostic operational view.
+- **Centered Layout:** Both the floor plan and pharmacy shelf images and all their interactive UI elements (beds, overlays, labels, cards) are centered in the viewport for wide and ultra-wide displays.
 
 ---
 
-## 5. API Reference (`app/api/`)
+## 4. Bed Color Meanings & Clinical Semantics
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/auth/login` | Authenticate staff with Supabase Auth (email/password) & set session cookies |
-| `POST` | `/api/auth/logout` | Sign out and clear active session |
-| `GET` | `/api/auth/user` | Get currently authenticated staff profile & role |
-| `GET` | `/api/ward/state` | Retrieve live ward operational model & metrics |
-| `GET` | `/api/ward/changes?since=<iso>` | "What changed?" temporal analysis since timestamp |
-| `GET` | `/api/ward/bottlenecks` | Active bottlenecks & contradictory state warnings |
-| `GET` | `/api/ward/handoff` | Structured shift handoff briefing |
-| `GET` | `/api/ward/next-actions` | Prioritized operational guidance ("What should I do next?") |
-| `GET` | `/api/beds` | Bed inventory & current statuses |
-| `GET` | `/api/beds/[id]` | Bed-level operational drilldown |
-| `PATCH`| `/api/beds/[id]` | Update bed status (`available`, `occupied`, `cleaning`, etc.) |
-| `GET` | `/api/beds/[id]/blockers` | Trace why a bed is blocked & get resolution steps |
-| `GET` | `/api/tasks` | Filterable operational task list |
-| `POST` | `/api/tasks` | Create task with dependencies and urgency |
-| `GET` | `/api/tasks/[id]` | Get detailed task lifecycle & assignments |
-| `PATCH`| `/api/tasks/[id]` | Transition task status (`acknowledged`, `in_progress`, etc.) |
-| `POST` | `/api/tasks/[id]/assign` | Assign task to staff member |
-| `GET` | `/api/tasks/[id]/blockers` | Trace task dependencies |
-| `GET` | `/api/print-queue` | Cloud printer queue with position numbers |
-| `POST` | `/api/print-queue` | Submit document to print queue (with duplicate prevention) |
-| `POST` | `/api/print-queue/[id]` | Retry failed print job |
-| `DELETE`|`/api/print-queue/[id]` | Cancel queued print job |
-| `POST` | `/api/warden/action` | Execute action with self-invalidation check |
-| `POST` | `/api/warden/orchestrate` | Multi-step orchestration (`prepare_bed`, `discharge_patient`) |
-| `POST` | `/api/simulation` | Trigger simulation events (`deterioration`, `staff_unavailable`, `printer_failure`, `cleaning_complete`) |
+The 11 beds on the ward floor plan reflect live clinical and operational state:
+
+| Color | Meaning | Beds | Details |
+| :--- | :--- | :--- | :--- |
+| **Green** | **Patient is doing well** | **Beds 1, 5, 6, 8, 9, 11** | Normal vitals, resolving conditions, all care complete, zero pending tasks. |
+| **Orange** | **Task you have to do there** | **Beds 2, 4, 7, 10** | Active operational task requiring action:<br>• **Bed 2:** Terminal UV-C disinfection & restock<br>• **Bed 4:** Awaiting Attending sign-off on blocked discharge<br>• **Bed 7:** Wheelchair porter dispatch with portable O2 to CT Suite 1<br>• **Bed 10:** Discharge medication handover & family escort checkout |
+| **Red** | **Danger & Priority Test** | **Bed 3** | Critical vitals deterioration (HR 118, SpO2 90%, BP 158/98), unstable angina. Priority test: **STAT Doctor Review & 12-lead ECG**. |
 
 ---
 
-## 6. Demo Staff Credentials
+## 5. Live Supabase Bed Drilldown Glass Card
 
-| Role | Staff Member | Email | Password |
-|---|---|---|---|
-| Charge Nurse | Nurse Priya Sharma | `nurse.priya@warden.hospital` | `WardenStaff2026!` |
-| Staff Nurse | Rahul Verma | `rahul.nurse@warden.hospital` | `WardenStaff2026!` |
-| Attending Doctor | Dr. Alok Shah | `dr.shah@warden.hospital` | `WardenStaff2026!` |
-| Ward Porter | Arjun Patel | `arjun.porter@warden.hospital` | `WardenStaff2026!` |
-| Night Coordinator | Sunita Rao | `warden.coordinator@warden.hospital` | `WardenStaff2026!` |
-
----
-
-## 7. Implementation Status & Roadmap
-
-- [x] **P0 — Infrastructure & DB:** Supabase database provisioned, linked, 65 tables/views migrated, RLS policies enabled, realtime publications configured.
-- [x] **P0 — Authentication:** Supabase Auth configured with cookie-based SSR sessions, verified login for 5 demo roles.
-- [x] **P0 — Seed Data:** Interconnected demo dataset covering deteriorating patients (Bed 8), oxygen requirements (Bed 12), 4-stage discharge blockers (Bed 14), ready discharges (Bed 17), cleaning beds (Bed 22), staff shifts, and cloud printers.
-- [x] **P0 — Core Backend Services:** `WardService`, `BedService`, `TaskService`, `PrintService`, `EventService`, `IntelligenceService`, `OrchestratorService`, `SimulationService`.
-- [x] **P0 — REST API Layer:** 17 production Route Handlers built, typed, and integration-tested.
-- [x] **P1 — Self-Invalidation Engine:** Verification of mutable entities at execution time with automated spoken correction generation.
-- [x] **P1 — Operational Intelligence:** Temporal change detection, dependency blocker tracing, bottleneck identification, dynamic next-action prioritization, shift handoff generation.
-- [x] **P1 — Vercel & GitHub:** Linked to Vercel and GitHub repository with automatic deployments and environment synchronization.
-- [ ] **P0 (Frontend Next Phase) — Live Ward UI:** Bed/floor map, drilldown drawers, realtime indicators, task execution panels.
-- [ ] **P0 (Voice Next Phase) — Voice Interface:** Speech-to-text, audio streaming, natural language intent parser, interruptible speech synthesis.
+Clicking any of the 11 beds populates the bottom-right glassmorphic card directly from Supabase:
+- **Bed & Acuity Badges:** `DOING WELL` (Green), `TASK PENDING` (Orange), `DANGER / STAT` (Red).
+- **Patient Profile:** Full name, Medical Record Number (MRN), Blood Type, Age/Sex, and Active Condition.
+- **Cardiac Waveform & Vitals Strip:** Real-time animated cardiac telemetry bars plus 4-column vitals: Heart Rate (with pulse animation), SpO2, Blood Pressure, and Temperature.
+- **Operational Notices:** Contextual banners highlighting pending tasks, discharge blockers, cleaning ETA, or clinical alerts.
+- **Action Toolbar:** One-click Porter Request dispatch and Print Clinical Paperwork triggers.
+- **ThinkingOrb Voice Agent:** Anchored to the bottom-right corner, reacting visually to voice states (`idle`, `listening`, `thinking`, `speaking`).
 
 ---
 
-## 8. Verification & Test Instructions
+## 6. Architecture & Services
 
-To verify the backend and database integration:
+### Frontend & API Layer (`app/`)
+- Built on Next.js 16 App Router with Turbopack.
+- REST endpoints under `/api/beds`, `/api/tasks`, `/api/ward`, `/api/voice/chat`, `/api/voice/tts`, `/api/voice/livekit`, `/api/print-queue`, `/api/simulation`.
+
+### Backend Service Layer (`lib/services/`)
+- **`WardService`:** Central operational aggregator, temporal "What changed?" queries, and bed drilldown resolver.
+- **`BedService`:** Deterministic bed lifecycle transitions (`occupied`, `cleaning`, `available`, `blocked`).
+- **`TaskService`:** Closed-loop operational task tracking with urgency and dependency tracing.
+- **`PrintService`:** Cloud printer queue manager with automated duplicate detection.
+- **`IntelligenceService`:** Runtime self-invalidation evaluation, bottleneck prediction, contradiction detection, and shift handoff generation.
+
+### Standalone Telephone Backend (`backend/`)
+- Express & TypeScript service for LiveKit SIP telephone dispatch.
+- Multi-provider TTS adapter supporting Fish Audio SSE streaming, Rime AI, and fallback waterfall.
+- Decoupled from Next.js root tsconfig to ensure clean Vercel production builds.
+- Comprehensive Vitest suite with 33/33 passing tests across 6 test suites.
+
+---
+
+## 7. Database (`Supabase / PostgreSQL`)
+
+- **Host:** `https://boxxmmxulpagjswsnvxw.supabase.co`
+- **Core Domains:** Physical facility (`beds`, `rooms`), clinical state (`patients`, `vitals`, `patient_conditions`), operational movement (`tasks`, `cleaning_jobs`, `discharge_plans`), and event memory (`patient_events`, `system_events`).
+- **Database Seeding:** Run `node --env-file=.env.local scripts/seed-beds.mjs` to re-seed all 11 beds and their clinical states.
+
+---
+
+## 8. Verification & Local Development
+
 ```bash
-# 1. Run typechecking
-npx tsc --noEmit
+# 1. Install dependencies
+npm install
 
-# 2. Build production bundle
+# 2. Run Next.js development server
+npm run dev
+
+# 3. Run production build
 npm run build
 
-# 3. Query linked database
-supabase db query --linked "SELECT bed_number, status, acuity FROM patient_current_state;"
+# 4. Run backend tests
+cd backend && npm test
 ```
+
+### Production Deployment
+- **Live Vercel Production URL:** [https://warden-eight-theta.vercel.app](https://warden-eight-theta.vercel.app)

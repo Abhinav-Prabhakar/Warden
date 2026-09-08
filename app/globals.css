@@ -42,25 +42,20 @@ body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
   filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.15));
 }
 
-/* User-Specified Bed Glows (Ward Screen)
-   Drop shadow: blur 250, spread 80, opacity 25%
-   Green: #24A951, 50% opacity (Patient is doing well)
-   Orange: #E67F1E, 50% opacity (Task you have to do there)
-   Red: #E61E1E, 50% opacity (Danger / priority test)
-*/
+/* User-Specified Bed Glows (Ward Screen) */
 .bed-glow-green {
-  background-color: rgba(36, 169, 81, 0.50);
-  box-shadow: 0 0 250px 80px rgba(36, 169, 81, 0.25), 0 0 24px 4px rgba(36, 169, 81, 0.35);
+  background-color: rgba(30, 230, 57, 0.20);
+  box-shadow: 0 0 250px 80px rgba(30, 230, 57, 0.10);
 }
 
 .bed-glow-orange {
   background-color: rgba(230, 127, 30, 0.50);
-  box-shadow: 0 0 250px 80px rgba(230, 127, 30, 0.25), 0 0 24px 4px rgba(230, 127, 30, 0.35);
+  box-shadow: 0 0 250px 80px rgba(230, 127, 30, 0.25);
 }
 
 .bed-glow-red {
-  background-color: rgba(230, 30, 30, 0.50);
-  box-shadow: 0 0 250px 80px rgba(230, 30, 30, 0.25), 0 0 24px 4px rgba(230, 30, 30, 0.35);
+  background-color: rgba(230, 30, 30, 0.40);
+  box-shadow: 0 0 250px 80px rgba(230, 30, 30, 0.20);
 }
 
 /* User-Specified Shelf Glows (Pharmacy Screen)
@@ -72,22 +67,22 @@ body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
 */
 .shelf-glow-cyan {
   background-color: rgba(30, 204, 230, 0.50);
-  box-shadow: 0 0 250px 80px rgba(30, 204, 230, 0.25), 0 0 24px 4px rgba(30, 204, 230, 0.35);
+  box-shadow: 0 0 250px 80px rgba(30, 204, 230, 0.25);
 }
 
 .shelf-glow-green {
   background-color: rgba(36, 169, 81, 0.50);
-  box-shadow: 0 0 250px 80px rgba(36, 169, 81, 0.25), 0 0 24px 4px rgba(36, 169, 81, 0.35);
+  box-shadow: 0 0 250px 80px rgba(36, 169, 81, 0.25);
 }
 
 .shelf-glow-orange {
   background-color: rgba(230, 127, 30, 0.50);
-  box-shadow: 0 0 250px 80px rgba(230, 127, 30, 0.25), 0 0 24px 4px rgba(230, 127, 30, 0.35);
+  box-shadow: 0 0 250px 80px rgba(230, 127, 30, 0.25);
 }
 
 .shelf-glow-magenta {
   background-color: rgba(230, 30, 103, 0.50);
-  box-shadow: 0 0 250px 80px rgba(230, 30, 103, 0.25), 0 0 24px 4px rgba(230, 30, 103, 0.35);
+  box-shadow: 0 0 250px 80px rgba(230, 30, 103, 0.25);
 }
 
 /* Shelf Light Fixture Glow
@@ -107,5 +102,52 @@ body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
   );
   filter: blur(250px);
   -webkit-filter: blur(250px);
+}
+
+/* Clinical Operations Card — scrolling ECG trace on monitor grid */
+.ecg-scroll {
+  animation: ecg-pan 4.5s linear infinite;
+}
+
+@keyframes ecg-pan {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.ecg-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 11px 11px;
+}
+
+/* Clinical Operations Card — content swap when selecting another bed */
+.card-content-enter {
+  animation: card-swap 240ms ease-out;
+}
+
+@keyframes card-swap {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Clinical Operations Card — indeterminate shimmer for cleaning in progress */
+.shimmer-track {
+  position: relative;
+  overflow: hidden;
+  background: rgba(240, 180, 41, 0.10);
+}
+
+.shimmer-track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(240, 180, 41, 0.5), transparent);
+  animation: shimmer-sweep 1.9s ease-in-out infinite;
+}
+
+@keyframes shimmer-sweep {
+  100% { transform: translateX(100%); }
 }
 

@@ -17,6 +17,7 @@ interface BedOverlay {
   patientName: string;
   patientAgeGender: string;
   statusText: string;
+  isCleaningJob?: boolean;
 }
 
 const BED_RECTANGLES: BedOverlay[] = [
@@ -44,6 +45,7 @@ const BED_RECTANGLES: BedOverlay[] = [
     patientName: "Terminal Disinfection",
     patientAgeGender: "Facilities",
     statusText: "TASK PENDING",
+    isCleaningJob: true,
   },
   {
     id: "bed-top-4",
@@ -164,12 +166,167 @@ const BED_RECTANGLES: BedOverlay[] = [
   },
 ];
 
-// Exact telemetry bars extracted from design waveform profile
-const BASE_WAVEFORM = [
-  37, 40, 46, 30, 6, 6, 6, 20, 6, 35, 6, 31, 34, 6, 13, 6, 21, 6, 30, 20,
-  22, 24, 6, 30, 18, 25, 12, 6, 15, 6, 21, 6, 6, 13, 6, 16, 6, 19, 6, 6,
-  21, 6, 22, 6, 26, 28, 6, 24, 6, 52, 48,
+/* ============================================================
+   Clinical card theming — one tone per bed state, reused by the
+   status pill, ambient glass glow, ECG trace and notice banner
+   ============================================================ */
+type CardTone = "danger" | "task" | "well";
+
+const CARD_TONE: Record<CardTone, { accent: string; text: string }> = {
+  danger: { accent: "#E61E67", text: "#FF9DB2" },
+  task: { accent: "#E67F1E", text: "#F4B476" },
+  well: { accent: "#24A951", text: "#82D99E" },
+};
+
+const NOTICE_THEME: Record<"blocker" | "alert" | "info" | "success", { accent: string; text: string }> = {
+  blocker: { accent: "#E67F1E", text: "#F4B476" },
+  alert: { accent: "#E61E67", text: "#FF9DB2" },
+  info: { accent: "#F0B429", text: "#F6CE72" },
+  success: { accent: "#24A951", text: "#82D99E" },
+};
+
+/* Loose shapes for the Supabase bed-drilldown payload — typed only where the card reads them */
+type BedDrilldown = {
+  bed?: {
+    status?: string;
+    patient?: {
+      medical_record_number?: string;
+      first_name?: string;
+      last_name?: string;
+      date_of_birth?: string;
+      sex?: string;
+      blood_type?: string;
+      admission_at?: string;
+      acuity?: string;
+      patient_conditions?: { name: string }[];
+      patient_allergies?: { allergen: string }[];
+    } | null;
+    room?: { room_number: string | number; floor_number: string | number } | null;
+  };
+  vitals?: {
+    heart_rate?: number;
+    spo2?: number;
+    systolic_bp?: number;
+    diastolic_bp?: number;
+    temperature?: number;
+    recorded_at?: string;
+  }[];
+  tasks?: { title?: string; status?: string }[];
+  discharge_plan?: { planned_discharge_at?: string; status?: string; notes?: string } | null;
+  cleaning_job?: { started_at?: string; status?: string } | null;
+};
+
+function NoticeIcon({ type, className }: { type: string; className?: string }) {
+  const common = {
+    className,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  if (type === "alert") {
+    return (
+      <svg {...common}>
+        <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+        <line x1="12" y1="9" x2="12" y2="13.5" />
+        <line x1="12" y1="17" x2="12" y2="17.01" />
+      </svg>
+    );
+  }
+  if (type === "info") {
+    return (
+      <svg {...common}>
+        <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
+        <path d="M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7L19 15z" />
+      </svg>
+    );
+  }
+  if (type === "blocker") {
+    return (
+      <svg {...common}>
+        <rect x="8" y="2" width="8" height="4" rx="1" />
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+        <path d="M9 12h6" />
+        <path d="M9 16h4" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8.5 12.2l2.4 2.4 4.6-5" />
+    </svg>
+  );
+}
+
+/* Single-beat ECG morphology: baseline → P wave → QRS complex → T wave
+   (x in beat units, y offset from baseline; negative y is upward) */
+const ECG_BEAT: Array<[number, number]> = [
+  [0, 0], [8, 0],
+  [12, -1.5], [16, -3.2], [20, -1.5], [24, 0],
+  [32, 0],
+  [36, 1.6], [39, 1.6],
+  [42.5, -15], [45.5, 6.5], [48, 0],
+  [56, 0],
+  [61, -2], [65, -4.4], [69, -2], [73, 0],
+  [82, 0], [90, 0],
 ];
+
+function buildEcgPath(beats: number, beatWidth: number, midY: number): string {
+  const points: string[] = [];
+  for (let b = 0; b < beats; b++) {
+    for (const [dx, dy] of ECG_BEAT) {
+      points.push(`${(b * beatWidth + dx).toFixed(1)},${(midY + dy).toFixed(1)}`);
+    }
+  }
+  return `M${points.join(" L")}`;
+}
+
+const ECG_PATH = buildEcgPath(6, 90, 21);
+
+function calcAge(dob?: string): number | null {
+  if (!dob) return null;
+  const t = new Date(dob).getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.floor((Date.now() - t) / (365.25 * 24 * 3600 * 1000));
+}
+
+function stayLabel(admissionAt?: string): string {
+  if (!admissionAt) return "—";
+  const ms = Date.now() - new Date(admissionAt).getTime();
+  if (Number.isNaN(ms) || ms < 0) return "—";
+  const days = Math.floor(ms / (24 * 3600 * 1000));
+  return days >= 1 ? `${days}d` : "<1d";
+}
+
+function elapsedLabel(ts?: string): string {
+  if (!ts) return "8m";
+  const ms = Date.now() - new Date(ts).getTime();
+  if (Number.isNaN(ms) || ms < 0) return "moments";
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return "moments";
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+function clockLabel(ts?: string): string {
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function dischargeLabel(ts?: string): string {
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString()
+    ? time
+    : `${d.toLocaleDateString([], { weekday: "short" })} ${time}`;
+}
 
 // Pharmacy highlighted items
 interface ShelfItem {
@@ -256,13 +413,12 @@ export default function WardenMainScreen() {
   );
   const [selectedMed, setSelectedMed] = useState<ShelfItem>(SHELF_ITEMS[1]); // Benadryl default
   const [searchQuery, setSearchQuery] = useState("");
-  const [barMultipliers, setBarMultipliers] = useState<number[]>(
-    BASE_WAVEFORM.map(() => 1)
-  );
 
-  // Live Supabase bed drilldown state
-  const [drilldownData, setDrilldownData] = useState<any>(null);
-  const [isLoadingDrilldown, setIsLoadingDrilldown] = useState(false);
+  // Live Supabase bed drilldown state — keyed by bed name so stale
+  // results from a previous selection are ignored while a new one loads
+  const [drilldown, setDrilldown] = useState<{ bedName: string; data: BedDrilldown } | null>(null);
+  const [settledBed, setSettledBed] = useState<string | null>(null);
+  const isLoadingDrilldown = settledBed !== selectedBed.name;
 
   // Modular Voice Agent Hook
   const {
@@ -292,25 +448,16 @@ export default function WardenMainScreen() {
   // Fetch detailed clinical drilldown from Supabase whenever selectedBed changes
   useEffect(() => {
     if (!selectedBed) return;
-    setIsLoadingDrilldown(true);
     fetch(`/api/beds/${encodeURIComponent(selectedBed.name)}`)
       .then((res) => res.json())
-      .then((data) => {
-        if (data && !data.error) {
-          setDrilldownData(data);
+      .then((data: BedDrilldown) => {
+        if (data && !(data as { error?: string }).error) {
+          setDrilldown({ bedName: selectedBed.name, data });
         }
       })
       .catch((err) => console.warn("Failed to fetch bed drilldown", err))
-      .finally(() => setIsLoadingDrilldown(false));
+      .finally(() => setSettledBed(selectedBed.name));
   }, [selectedBed]);
-
-  // Subtle live cardiac telemetry pulse animation
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setBarMultipliers(BASE_WAVEFORM.map(() => 0.88 + Math.random() * 0.24));
-    }, 750);
-    return () => clearInterval(interval);
-  }, []);
 
   // Keyboard navigation between screens (Arrow keys)
   useEffect(() => {
@@ -384,22 +531,45 @@ export default function WardenMainScreen() {
   const handleMouseUp = () => handleDragEnd();
   const handleMouseLeave = () => { if (isDragging) handleDragEnd(); };
 
-  // Derived drilldown data values
+  // Derived drilldown data values (stale results from another bed are ignored)
+  const drilldownData = drilldown?.bedName === selectedBed.name ? drilldown.data : null;
   const patientRecord = drilldownData?.bed?.patient;
   const latestVitals = drilldownData?.vitals?.[0];
   const bedStatus = drilldownData?.bed?.status || selectedBed.statusText?.toLowerCase() || "occupied";
-  const isOccupied = bedStatus === "occupied" || !!patientRecord;
-  const isCleaning = bedStatus === "cleaning" || selectedBed.color === "orange" && selectedBed.statusText === "CLEANING";
-  const isBlocked = bedStatus === "blocked" || selectedBed.statusText === "BLOCKED";
   const isCritical = patientRecord?.acuity === "critical" || selectedBed.color === "red" || (latestVitals?.heart_rate && latestVitals.heart_rate > 110);
+  const isCleaning = bedStatus === "cleaning" || selectedBed.isCleaningJob === true;
+  const isBlocked = bedStatus === "blocked" || selectedBed.statusText === "BLOCKED";
+  const isOccupied = !!patientRecord || (!isCleaning && bedStatus !== "available");
 
+  const activeTask = drilldownData?.tasks?.[0];
+  const hasTask = Boolean(activeTask && activeTask.status !== "completed") || selectedBed.color === "orange";
+
+  // One tone per bed drives the pill, ambient glow, waveform and notice
+  const cardTone: CardTone = isCritical ? "danger" : hasTask || isBlocked || isCleaning ? "task" : "well";
+  const tone = CARD_TONE[cardTone];
+  const pillLabel = isCritical
+    ? "DANGER / STAT"
+    : !isOccupied && !isCleaning
+    ? "BED READY"
+    : hasTask || isBlocked || isCleaning || selectedBed.color === "orange"
+    ? "TASK PENDING"
+    : "DOING WELL";
+
+  const patientAge = calcAge(patientRecord?.date_of_birth);
+  const patientAgeGender = patientAge != null
+    ? `${patientAge}${(patientRecord?.sex || "U").toUpperCase().slice(0, 1)}`
+    : selectedBed.patientAgeGender || patientRecord?.sex || "";
   const patientFullName = patientRecord
     ? `${patientRecord.first_name} ${patientRecord.last_name}`
     : selectedBed.patientName;
-  const patientAgeGender = selectedBed.patientAgeGender || (patientRecord?.sex ? `${patientRecord.sex}` : "");
   const patientMRN = patientRecord?.medical_record_number || "MRN-2004";
   const patientBlood = patientRecord?.blood_type || "B+";
-  const patientCondition = patientRecord?.patient_conditions?.[0]?.name || "Acute Observation";
+  const patientCondition = drilldownData?.bed?.patient?.patient_conditions?.[0]?.name || "Acute Observation";
+  const allergies = patientRecord?.patient_allergies?.slice(0, 2) || [];
+
+  const roomLabel = drilldownData?.bed?.room
+    ? `Room ${drilldownData.bed.room.room_number} · Floor ${drilldownData.bed.room.floor_number}`
+    : "General Ward · Floor 7";
 
   const vitalsHR = latestVitals?.heart_rate || (isCritical ? 118 : 78);
   const vitalsSpO2 = latestVitals?.spo2 || (isCritical ? 90 : 98);
@@ -407,46 +577,49 @@ export default function WardenMainScreen() {
     ? `${latestVitals.systolic_bp}/${latestVitals.diastolic_bp}`
     : isCritical ? "158/98" : "120/80";
   const vitalsTemp = latestVitals?.temperature || (isCritical ? 38.2 : 36.8);
+  const bpWarn = (latestVitals?.systolic_bp && latestVitals.systolic_bp >= 140) ||
+    (latestVitals?.diastolic_bp && latestVitals.diastolic_bp >= 90);
 
-  const activeTask = drilldownData?.tasks?.[0];
-  const hasTask = Boolean(activeTask && activeTask.status !== "completed") || selectedBed.color === "orange";
+  const openTasks = (drilldownData?.tasks || []).filter(
+    (t) => !["done", "completed", "cancelled"].includes(t?.status ?? "")
+  ).length;
+  const stay = stayLabel(patientRecord?.admission_at);
+  const dischargeAt = dischargeLabel(drilldownData?.discharge_plan?.planned_discharge_at);
+  const vitalsTime = clockLabel(latestVitals?.recorded_at);
+  const cleaningElapsed = elapsedLabel(drilldownData?.cleaning_job?.started_at);
 
   // Operational notice reflecting:
-  // - RED: Danger & priority test
+  // - RED: Danger & priority task
   // - ORANGE: Task you have to do there
   // - GREEN: Patient is doing well
-  let operationalNotice: { type: "blocker" | "alert" | "info" | "success"; text: string; icon: string } | null = null;
+  let operationalNotice: { type: "blocker" | "alert" | "info" | "success"; text: string } | null = null;
   if (isCritical) {
     operationalNotice = {
       type: "alert",
-      icon: "🚨",
       text: activeTask?.title ? `DANGER • ${activeTask.title}` : "DANGER: Critical vitals deterioration • STAT Doctor Review & 12-lead ECG",
     };
-  } else if (isCleaning || drilldownData?.cleaning_job?.status === "in_progress" || selectedBed.name === "Bed 2") {
+  } else if (isCleaning || drilldownData?.cleaning_job?.status === "in_progress") {
     operationalNotice = {
       type: "info",
-      icon: "🧹",
       text: "Task Pending • Terminal disinfection & UV-C decontamination (Facilities)",
     };
   } else if (activeTask) {
     operationalNotice = {
       type: "blocker",
-      icon: "📋",
       text: `Task Pending • ${activeTask.title}`,
     };
   } else if (isBlocked || drilldownData?.discharge_plan?.status === "delayed") {
     operationalNotice = {
       type: "blocker",
-      icon: "⚠️",
       text: drilldownData?.discharge_plan?.notes || "Task Pending • Discharge blocked: awaiting attending signature",
     };
   } else {
     operationalNotice = {
       type: "success",
-      icon: "✅",
       text: "Patient doing well • All scheduled care complete • Vitals stable",
     };
   }
+  const noticeTheme = operationalNotice ? NOTICE_THEME[operationalNotice.type] : null;
 
   return (
     <main
@@ -600,186 +773,275 @@ export default function WardenMainScreen() {
                 BOTTOM RIGHT GLASSMORPHIC CLINICAL OPERATIONS CARD
                ============================================================= */}
             <div
-              className="absolute z-20 figma-glass-card rounded-[22px] p-[18px] pb-[16px] flex flex-col justify-between"
+              className="absolute z-20 figma-glass-card rounded-[20px] p-[16px] pb-[14px]"
               style={{
                 right: "2.5%",
                 bottom: "3.2%",
-                width: "25.2%",
-                minWidth: "310px",
-                maxWidth: "356px",
-                maxHeight: "360px",
+                width: "26%",
+                minWidth: "318px",
+                maxWidth: "372px",
+                maxHeight: "412px",
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header: Bed Number, Acuity Status, Room & Floor */}
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-white text-[19px] font-semibold tracking-[-0.02em] leading-tight">
-                      {selectedBed.name}
-                    </h2>
-                    <span
-                      className={`text-[9.5px] font-semibold tracking-[0.06em] uppercase px-2 py-0.5 rounded-full border ${
-                        isCritical
-                          ? "bg-red-500/20 border-red-500/40 text-red-300"
-                          : selectedBed.color === "orange" || hasTask || isBlocked || isCleaning
-                          ? "bg-orange-500/20 border-orange-500/40 text-orange-300"
-                          : "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
-                      }`}
-                    >
-                      {isCritical
-                        ? "DANGER / STAT"
-                        : selectedBed.color === "orange" || hasTask || isCleaning || isBlocked
-                        ? "TASK PENDING"
-                        : "DOING WELL"}
-                    </span>
+              {/* Ambient tone light refracting inside the glass + top sheen */}
+              <div
+                className="absolute inset-0 rounded-[inherit] pointer-events-none"
+                style={{
+                  background: `radial-gradient(170px 90px at 88% -12%, ${tone.accent}2e, transparent 68%), linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 24%)`,
+                }}
+              />
+
+              <div key={selectedBed.id} className="card-content-enter relative flex flex-col gap-[9px]">
+                {/* Header overline — bed · room · floor + status pill */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-baseline gap-[6px] min-w-0 text-[10px] font-medium uppercase tracking-[0.14em]">
+                    <span className="font-bold text-[#C6CBD9] whitespace-nowrap">{selectedBed.name}</span>
+                    <span className="text-[#565B6B]">·</span>
+                    <span className="text-[#8E92A4] truncate">{roomLabel}</span>
                   </div>
-                  <span className="text-[#8E92A4] text-[11px] font-medium">
-                    Room 401 • Floor 7
+                  <span
+                    className="shrink-0 flex items-center gap-[5px] pl-[8px] pr-[9px] py-[3px] rounded-full border"
+                    style={{
+                      background: `${tone.accent}1f`,
+                      borderColor: `${tone.accent}4a`,
+                      color: tone.text,
+                    }}
+                  >
+                    <span className="relative flex h-[5px] w-[5px]">
+                      {cardTone !== "well" && (
+                        <span
+                          className="absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping"
+                          style={{ background: tone.accent }}
+                        />
+                      )}
+                      <span
+                        className="relative inline-flex h-[5px] w-[5px] rounded-full"
+                        style={{ background: tone.accent, boxShadow: `0 0 6px ${tone.accent}` }}
+                      />
+                    </span>
+                    <span className="text-[8.5px] font-bold tracking-[0.14em] leading-none pt-[1px]">
+                      {pillLabel}
+                    </span>
                   </span>
                 </div>
 
-                {/* Patient Primary Details */}
+                {/* Patient / bed-state hero */}
                 {isOccupied ? (
-                  <div className="flex flex-col mt-0.5">
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-white text-[16px] font-semibold tracking-[-0.01em]">
+                  <>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <h2 className="text-white text-[17px] font-semibold tracking-[-0.01em] leading-tight truncate">
                         {patientFullName}
-                      </span>
-                      <span className="text-[#8E92A4] text-[11px] font-mono">
-                        {patientMRN}
-                      </span>
+                      </h2>
+                      <span className="shrink-0 text-[#7A8095] text-[10px] font-mono">{patientMRN}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-[11.5px] text-[#A6ACBE] mt-0.5">
-                      <span>{patientAgeGender}</span>
-                      <span className="text-[#4E5364]">•</span>
-                      <span>Blood {patientBlood}</span>
-                      <span className="text-[#4E5364]">•</span>
-                      <span className="text-[#1ECCE6] truncate max-w-[130px] font-medium">
-                        {patientCondition}
-                      </span>
+                    <div className="flex items-center gap-[6px] min-w-0 text-[10.5px] text-[#A6ACBE]">
+                      <span className="whitespace-nowrap">{patientAgeGender}</span>
+                      <span className="text-[#4E5364]">·</span>
+                      <span className="whitespace-nowrap">{patientBlood}</span>
+                      <span className="text-[#4E5364]">·</span>
+                      <span className="text-[#1ECCE6] font-medium truncate">{patientCondition}</span>
+                      {allergies.map((a, i) => (
+                        <span
+                          key={i}
+                          className="shrink-0 inline-flex items-center gap-[3px] px-[6px] py-[1.5px] rounded-full border text-[8.5px] font-semibold tracking-[0.04em]"
+                          style={{ background: "#E61E6717", borderColor: "#E61E6740", color: "#FF9DB2" }}
+                          title={`Allergy: ${a.allergen}`}
+                        >
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12" y2="17.01" />
+                          </svg>
+                          {a.allergen}
+                        </span>
+                      ))}
                     </div>
-                  </div>
+                  </>
                 ) : isCleaning ? (
-                  <div className="flex flex-col mt-0.5">
-                    <span className="text-[#E67F1E] text-[14px] font-semibold">
-                      Terminal Sanitization
-                    </span>
-                    <span className="text-[#A6ACBE] text-[11.5px] mt-0.5">
-                      Cleaning started 8m ago • Assigned: Facilities
+                  <div className="flex flex-col gap-[7px] py-[2px]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[15px] font-semibold text-[#F6CE72] tracking-[-0.01em]">
+                        Terminal Sanitization
+                      </span>
+                      <span className="text-[10px] font-mono text-[#8E92A4]">{cleaningElapsed} elapsed</span>
+                    </div>
+                    <div className="h-[4px] rounded-full shimmer-track border border-[#F0B429]/15" />
+                    <span className="text-[10.5px] text-[#A6ACBE] leading-[1.45]">
+                      Started {cleaningElapsed} ago · Assigned: Facilities · Bed locked for admission
                     </span>
                   </div>
                 ) : (
-                  <div className="flex flex-col mt-0.5">
-                    <span className="text-[#24A951] text-[14px] font-semibold">
-                      Sanitized & Ready
-                    </span>
-                    <span className="text-[#A6ACBE] text-[11.5px] mt-0.5">
-                      Available for immediate inpatient admission
+                  <div className="flex items-center gap-[12px] py-[4px]">
+                    <div
+                      className="w-[34px] h-[34px] shrink-0 rounded-full flex items-center justify-center border"
+                      style={{ background: "#24A9511a", borderColor: "#24A95142", boxShadow: "0 0 14px #24A95126" }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#82D99E" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[15px] font-semibold text-[#82D99E] tracking-[-0.01em]">
+                        Sanitized & Ready
+                      </span>
+                      <span className="text-[10.5px] text-[#A6ACBE] mt-[2px]">
+                        Available for immediate inpatient admission
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Live ECG strip + vitals (occupied beds only) */}
+                {isOccupied && (
+                  <>
+                    <div className="relative h-[42px] rounded-[10px] border border-white/[0.06] bg-[#0A0D13]/70 ecg-grid overflow-hidden">
+                      {/* Scrolling trace — two identical halves loop seamlessly */}
+                      <div
+                        className="absolute inset-y-0 left-0 flex w-[200%] ecg-scroll"
+                        style={{
+                          animationDuration: isCritical ? "2.6s" : "4.5s",
+                          maskImage: "linear-gradient(90deg, transparent 0%, black 14%)",
+                          WebkitMaskImage: "linear-gradient(90deg, transparent 0%, black 14%)",
+                        }}
+                      >
+                        {[0, 1].map((half) => (
+                          <svg key={half} viewBox="0 0 540 42" preserveAspectRatio="none" className="block h-full w-1/2" aria-hidden="true">
+                            <path
+                              d={ECG_PATH}
+                              fill="none"
+                              stroke={isCritical ? "#E61E67" : "#1ECCE6"}
+                              strokeWidth="1.6"
+                              strokeLinejoin="round"
+                              strokeLinecap="round"
+                              vectorEffect="non-scaling-stroke"
+                              style={{ filter: `drop-shadow(0 0 3px ${isCritical ? "#E61E67" : "#1ECCE6"}80)` }}
+                            />
+                          </svg>
+                        ))}
+                      </div>
+
+                      {/* Heart-rate badge */}
+                      <div className="absolute left-[9px] top-1/2 -translate-y-1/2 flex items-center gap-[6px]">
+                        <svg
+                          width="11"
+                          height="11"
+                          viewBox="0 0 24 24"
+                          fill={isCritical ? "#E61E67" : "none"}
+                          stroke={isCritical ? "#E61E67" : "#1ECCE6"}
+                          strokeWidth="2"
+                          className={isCritical ? "animate-pulse" : ""}
+                        >
+                          <path d="M19.5 13.6 12 21l-7.5-7.4A5.2 5.2 0 0 1 12 6.2a5.2 5.2 0 0 1 7.5 7.4z" />
+                        </svg>
+                        <span
+                          className={`text-[15px] leading-none font-mono font-semibold ${
+                            isCritical ? "text-[#FF9DB2] animate-pulse" : "text-white"
+                          }`}
+                        >
+                          {vitalsHR}
+                        </span>
+                        <span className="text-[8px] font-medium uppercase tracking-[0.16em] text-[#6D7385]">bpm</span>
+                      </div>
+
+                      {/* Live / last-recording indicator */}
+                      <div className="absolute right-[9px] top-1/2 -translate-y-1/2 flex items-center gap-[4px]">
+                        <span
+                          className={`w-[5px] h-[5px] rounded-full ${isLoadingDrilldown ? "" : "animate-pulse"}`}
+                          style={{ background: isLoadingDrilldown ? "#F0B429" : "#1ECCE6", boxShadow: "0 0 6px rgba(30, 204, 230, 0.8)" }}
+                        />
+                        <span className="text-[8px] font-semibold tracking-[0.18em] text-[#7A8095]">
+                          {isLoadingDrilldown ? "SYNC" : vitalsTime || "LIVE"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Vitals strip — hairline dividers instead of boxes */}
+                    <div className="grid grid-cols-4 divide-x divide-white/[0.07]">
+                      {[
+                        { label: "SPO2", value: `${vitalsSpO2}%`, warn: vitalsSpO2 < 92, title: "Blood oxygen saturation" },
+                        { label: "BP", value: vitalsBP, warn: !!bpWarn, title: "Blood pressure (systolic/diastolic)" },
+                        { label: "TEMP", value: `${vitalsTemp}°`, warn: vitalsTemp >= 37.8, title: "Core temperature °C" },
+                        { label: "STAY", value: stay, warn: false, title: "Length of stay since admission" },
+                      ].map((v) => (
+                        <div key={v.label} className="px-1 py-[3px] text-center" title={v.title}>
+                          <div className="text-[8px] font-semibold uppercase tracking-[0.16em] text-[#7A8095]">{v.label}</div>
+                          <div className={`mt-[2px] text-[12.5px] leading-none font-mono font-semibold ${v.warn ? "text-[#F4B476]" : "text-[#E8EBF2]"}`}>
+                            {v.value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Operational context line */}
+                    {(openTasks > 0 || dischargeAt) && (
+                      <div className="flex items-center gap-[6px] min-w-0 text-[9.5px] font-medium text-[#7A8095] truncate">
+                        {openTasks > 0 && (
+                          <span className="flex items-center gap-[4px] whitespace-nowrap">
+                            <span className="w-[4px] h-[4px] rounded-full" style={{ background: tone.accent }} />
+                            {openTasks} open task{openTasks === 1 ? "" : "s"}
+                          </span>
+                        )}
+                        {dischargeAt && (
+                          <span className="truncate">
+                            {openTasks > 0 && <span className="text-[#4E5364] mr-[6px]">·</span>}
+                            Discharge planned {dischargeAt}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Operational notice banner */}
+                {operationalNotice && noticeTheme && (
+                  <div
+                    className="flex items-start gap-[7px] rounded-[10px] border px-[9px] py-[7px]"
+                    style={{ background: `${noticeTheme.accent}14`, borderColor: `${noticeTheme.accent}33` }}
+                  >
+                    <span
+                      className="w-[3px] self-stretch rounded-full shrink-0"
+                      style={{ background: noticeTheme.accent, boxShadow: `0 0 8px ${noticeTheme.accent}80` }}
+                    />
+                    <NoticeIcon type={operationalNotice.type} className="w-[12px] h-[12px] shrink-0 mt-[1px]" />
+                    <span className="text-[10.5px] leading-[1.45] font-medium line-clamp-2" style={{ color: noticeTheme.text }}>
+                      {operationalNotice.text}
                     </span>
                   </div>
                 )}
-              </div>
 
-              {/* Real-Time Cardiac Waveform & 4-Pill Vitals */}
-              {isOccupied && (
-                <div className="flex flex-col gap-1.5 my-1">
-                  {/* Waveform */}
-                  <div className="flex items-end gap-[2px] h-[34px] px-1 bg-black/20 rounded-[8px] py-1 border border-white/5">
-                    {BASE_WAVEFORM.slice(0, 36).map((baseH, i) => {
-                      const currentHeight = Math.max(
-                        3,
-                        Math.min(26, Math.round((baseH * 0.6) * (barMultipliers[i] || 1)))
-                      );
-                      return (
-                        <div
-                          key={i}
-                          className={`w-[2.5px] rounded-full transition-all duration-300 ${
-                            isCritical ? "bg-[#E61E67] opacity-80" : "bg-[#1ECCE6] opacity-70"
-                          }`}
-                          style={{ height: `${currentHeight}px` }}
-                        />
-                      );
-                    })}
+                {/* Footer actions */}
+                <div className="flex items-center pt-[9px] border-t border-white/[0.08]">
+                  <div className="flex items-center gap-[7px]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        alert(`Transporter dispatch request sent for ${selectedBed.name}`);
+                      }}
+                      className="flex items-center gap-[5px] px-[10px] h-[28px] rounded-[8px] bg-white/[0.06] hover:bg-white/[0.12] active:scale-[0.97] border border-white/10 hover:border-white/20 text-[10.5px] font-medium text-[#C9CEDC] transition-all"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                      </svg>
+                      <span>Porter</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        alert(`Printing clinical discharge paperwork for ${selectedBed.name}`);
+                      }}
+                      className="flex items-center gap-[5px] px-[10px] h-[28px] rounded-[8px] bg-white/[0.06] hover:bg-white/[0.12] active:scale-[0.97] border border-white/10 hover:border-white/20 text-[10.5px] font-medium text-[#C9CEDC] transition-all"
+                      title="Print Summary"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 9V2h12v7" />
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                        <rect x="6" y="14" width="12" height="8" rx="1" />
+                      </svg>
+                      <span>Print</span>
+                    </button>
                   </div>
-
-                  {/* Vitals 4-col Strip */}
-                  <div className="grid grid-cols-4 gap-1 text-center">
-                    <div className="bg-white/[0.03] border border-white/5 rounded-[6px] py-1">
-                      <div className="text-[9px] text-[#8E92A4] font-medium uppercase">HR</div>
-                      <div className={`text-[12px] font-semibold font-mono ${isCritical ? "text-[#E61E67] animate-pulse" : "text-white"}`}>
-                        {vitalsHR} <span className="text-[8px] font-normal text-[#6D7282]">bpm</span>
-                      </div>
-                    </div>
-                    <div className="bg-white/[0.03] border border-white/5 rounded-[6px] py-1">
-                      <div className="text-[9px] text-[#8E92A4] font-medium uppercase">SpO2</div>
-                      <div className={`text-[12px] font-semibold font-mono ${vitalsSpO2 < 92 ? "text-[#E67F1E]" : "text-white"}`}>
-                        {vitalsSpO2}%
-                      </div>
-                    </div>
-                    <div className="bg-white/[0.03] border border-white/5 rounded-[6px] py-1">
-                      <div className="text-[9px] text-[#8E92A4] font-medium uppercase">BP</div>
-                      <div className="text-[12px] font-semibold font-mono text-white">
-                        {vitalsBP}
-                      </div>
-                    </div>
-                    <div className="bg-white/[0.03] border border-white/5 rounded-[6px] py-1">
-                      <div className="text-[9px] text-[#8E92A4] font-medium uppercase">Temp</div>
-                      <div className="text-[12px] font-semibold font-mono text-white">
-                        {vitalsTemp}°C
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Operational Blockage / Task Alert Box */}
-              {operationalNotice && (
-                <div
-                  className={`rounded-[8px] p-2 text-[11px] leading-[1.3] border flex items-start gap-1.5 ${
-                    operationalNotice.type === "blocker"
-                      ? "bg-[#E67F1E]/15 border-[#E67F1E]/30 text-[#F4B476]"
-                      : operationalNotice.type === "alert"
-                      ? "bg-[#E61E67]/15 border-[#E61E67]/30 text-[#F482A3]"
-                      : "bg-[#24A951]/15 border-[#24A951]/30 text-[#82D99E]"
-                  }`}
-                >
-                  <span className="text-[12px] shrink-0">{operationalNotice.icon}</span>
-                  <span className="truncate">{operationalNotice.text}</span>
-                </div>
-              )}
-
-              {/* Bottom Action Row: Action buttons + ThinkingOrb */}
-              <div className="flex items-center justify-between pt-1 border-t border-white/10 mt-1">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      alert(`Transporter dispatch request sent for ${selectedBed.name}`);
-                    }}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-white/[0.05] hover:bg-white/10 border border-white/10 text-[11px] text-[#C1C6D7] transition-all"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                    </svg>
-                    <span>Porter</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      alert(`Printing clinical discharge paperwork for ${selectedBed.name}`);
-                    }}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-white/[0.05] hover:bg-white/10 border border-white/10 text-[11px] text-[#C1C6D7] transition-all"
-                    title="Print Summary"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M6 9V2h12v7" />
-                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                      <rect x="6" y="14" width="12" height="8" rx="1" />
-                    </svg>
-                    <span>Print</span>
-                  </button>
                 </div>
               </div>
 
