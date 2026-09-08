@@ -8,6 +8,7 @@ import { VoiceSettingsModal } from "@/app/components/VoiceSettingsModal";
 import { StaffDirectoryCard } from "@/app/components/StaffDirectoryCard";
 import { SatelliteRadioCard } from "@/app/components/SatelliteRadioCard";
 import { EnergyEfficiencyCard } from "@/app/components/EnergyEfficiencyCard";
+import { TelephoneCallAssistantCard } from "@/app/components/TelephoneCallAssistantCard";
 
 interface BedOverlay {
   id: string;
@@ -317,6 +318,7 @@ export default function WardenMainScreen() {
   const [isStaffOpen, setIsStaffOpen] = useState<boolean>(false);
   const [isRadioOpen, setIsRadioOpen] = useState<boolean>(false);
   const [isEfficiencyOpen, setIsEfficiencyOpen] = useState<boolean>(false);
+  const [isPhoneOpen, setIsPhoneOpen] = useState<boolean>(false);
 
   // Live Beds state from Supabase
   const [beds, setBeds] = useState<BedOverlay[]>([]);
@@ -803,6 +805,7 @@ export default function WardenMainScreen() {
                   setIsRadioOpen((prev) => !prev);
                   setIsStaffOpen(false);
                   setIsEfficiencyOpen(false);
+                  setIsPhoneOpen(false);
                 }}
                 className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
                   isRadioOpen
@@ -822,6 +825,7 @@ export default function WardenMainScreen() {
                   setIsStaffOpen((prev) => !prev);
                   setIsRadioOpen(false);
                   setIsEfficiencyOpen(false);
+                  setIsPhoneOpen(false);
                 }}
                 className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
                   isStaffOpen
@@ -841,6 +845,7 @@ export default function WardenMainScreen() {
                   setIsEfficiencyOpen((prev) => !prev);
                   setIsRadioOpen(false);
                   setIsStaffOpen(false);
+                  setIsPhoneOpen(false);
                 }}
                 className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
                   isEfficiencyOpen
@@ -852,11 +857,22 @@ export default function WardenMainScreen() {
                 <Image src="/leaf.svg" alt="Efficiency" width={18} height={18} />
               </button>
 
-              {/* Telephone */}
+              {/* Telephone / Autonomous Inpatient Calls */}
               <button
-                aria-label="Telephone"
-                className="w-[18px] h-[18px] opacity-45 hover:opacity-100 transition-opacity duration-200 cursor-pointer"
-                title="Telephone Comms"
+                aria-label="Telephone Comms & Autonomous Patient Check-in Calls"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsPhoneOpen((prev) => !prev);
+                  setIsRadioOpen(false);
+                  setIsStaffOpen(false);
+                  setIsEfficiencyOpen(false);
+                }}
+                className={`w-[18px] h-[18px] transition-all duration-200 cursor-pointer ${
+                  isPhoneOpen
+                    ? "opacity-100 scale-110 drop-shadow-[0_0_8px_rgba(200,115,150,0.8)]"
+                    : "opacity-45 hover:opacity-100"
+                }`}
+                title="Telephone Comms & Automated Patient Calls"
               >
                 <Image src="/phone.svg" alt="Phone" width={18} height={18} />
               </button>
@@ -881,6 +897,13 @@ export default function WardenMainScreen() {
               onClose={() => setIsEfficiencyOpen(false)}
               currentFloor={currentFloor}
               onSelectFloor={(fl) => setCurrentFloor(fl)}
+            />
+
+            {/* Telephone Comms & Patient Call Assistant Glass Card */}
+            <TelephoneCallAssistantCard
+              isOpen={isPhoneOpen}
+              onClose={() => setIsPhoneOpen(false)}
+              currentFloor={currentFloor}
             />
 
             {/* =============================================================
