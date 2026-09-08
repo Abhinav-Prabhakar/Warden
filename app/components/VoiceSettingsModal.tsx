@@ -154,11 +154,12 @@ export function VoiceSettingsModal({
           <label className="text-[11.5px] font-medium tracking-[0.04em] uppercase text-[#8E92A4]">
             Text-to-Speech (TTS) Engine
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-1.5">
             {[
+              { id: "fish_audio", label: "Fish Audio" },
               { id: "rime", label: "Rime AI" },
-              { id: "openai", label: "OpenAI TTS" },
-              { id: "browser_speech", label: "Browser Audio" },
+              { id: "openai", label: "OpenAI" },
+              { id: "browser_speech", label: "Browser" },
             ].map((tts) => (
               <button
                 key={tts.id}
@@ -166,10 +167,14 @@ export function VoiceSettingsModal({
                 onClick={() =>
                   setLocalConfig({
                     ...localConfig,
-                    tts: { ...localConfig.tts, provider: tts.id as TTSProvider },
+                    tts: {
+                      ...localConfig.tts,
+                      provider: tts.id as TTSProvider,
+                      modelId: tts.id === "fish_audio" ? "s2.1-pro-free" : localConfig.tts.modelId,
+                    },
                   })
                 }
-                className={`py-2 px-2 rounded-[10px] text-[11.5px] font-medium transition-all text-center border ${
+                className={`py-2 px-1.5 rounded-[10px] text-[11px] font-medium transition-all text-center border ${
                   localConfig.tts.provider === tts.id
                     ? "bg-white/15 border-white/40 text-white shadow-sm"
                     : "bg-white/[0.03] border-white/5 text-[#8E92A4] hover:bg-white/[0.08]"
@@ -179,6 +184,31 @@ export function VoiceSettingsModal({
               </button>
             ))}
           </div>
+
+          {localConfig.tts.provider === "fish_audio" && (
+            <div className="flex flex-col gap-2 mt-1 bg-white/[0.02] p-2.5 rounded-[10px] border border-white/5">
+              <div className="flex items-center justify-between text-[11px] text-[#8E92A4]">
+                <span>Model Tier</span>
+                <span className="font-mono text-[11px] text-[#1ECCE6] bg-[#1ECCE6]/10 px-2 py-0.5 rounded border border-[#1ECCE6]/20">
+                  s2.1-pro-free
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-[#8E92A4]">
+                <span>Chunk Stream Synthesis</span>
+                <input
+                  type="checkbox"
+                  checked={localConfig.tts.streamSSE}
+                  onChange={(e) =>
+                    setLocalConfig({
+                      ...localConfig,
+                      tts: { ...localConfig.tts, streamSSE: e.target.checked },
+                    })
+                  }
+                  className="accent-[#1ECCE6] cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
 
           {localConfig.tts.provider === "rime" && (
             <div className="flex flex-col gap-1.5 mt-1 bg-white/[0.02] p-2.5 rounded-[10px] border border-white/5">

@@ -38,10 +38,11 @@ export default defineAgent({
       });
       await session.start({
         room: ctx.room,
-        agent: new voice.Agent({
-          instructions: "You are Warden calling a hospital porter. Read the assignment exactly. Ask them to say accept or reject, or press 1 or 2. Map 1 to accepted and 2 to rejected. Always call recordResponse after an explicit answer. Do not claim acceptance before the tool succeeds.",
+        agent: createAgent(
+          config,
+          "You are Warden calling a hospital porter. Read the assignment exactly. Ask them to say accept or reject, or press 1 or 2. Map 1 to accepted and 2 to rejected. Always call recordResponse after an explicit answer. Do not claim acceptance before the tool succeeds.",
           tools,
-        }),
+        ),
       });
       await session.say(metadata.prompt ?? "A transport request is waiting. Say accept or reject, or press 1 or 2.");
       return;
@@ -79,20 +80,77 @@ export default defineAgent({
     const session = createSession(config, tools);
     await session.start({
       room: ctx.room,
-      agent: new voice.Agent({
-        instructions: "You are Warden, a concise hospital transport coordinator. First verify the caller with verifyCaller. Collect bed, destination, urgency and wheelchair or stretcher. Repeat the request and ask for confirmation. Only then call createTransport. Report created, contacted and accepted states precisely from tool results. Never invent patient or task status.",
+      agent: createAgent(
+        config,
+        "You are Warden, a concise hospital transport coordinator. First verify the caller with verifyCaller. Collect bed, destination, urgency and wheelchair or stretcher. Repeat the request and ask for confirmation. Only then call createTransport. Report created, contacted and accepted states precisely from tool results. Never invent patient or task status.",
         tools,
-      }),
+      ),
     });
     await session.say("Warden speaking. Please say your PIN to verify your identity.");
   },
 });
 
+function getTTSModelString(config: ReturnType<typeof loadConfig>): string {
+  if (config.TTS_PROVIDER === "fish-audio") {
+    const model = config.TTS_MODEL.startsWith("fish-audio/")
+      ? config.TTS_MODEL
+      : `fish-audio/${config.TTS_MODEL || "s2.1-pro-free"}`;
+    return config.TTS_VOICE && config.TTS_VOICE !== "default"
+      ? `${model}:${config.TTS_VOICE}`
+      : model;
+  }
+  if (config.TTS_PROVIDER === "rime") {
+    const model = config.TTS_MODEL.startsWith("rime/")
+      ? config.TTS_MODEL
+      : `rime/${config.TTS_MODEL || "mistv2"}`;
+    return `${model}:${config.TTS_VOICE || "abbie"}`;
+  }
+  return `${config.TTS_MODEL}:${config.TTS_VOICE}`;
+}
+
+function createAgent(
+  config: ReturnType<typeof loadConfig>,
+  instructions: string,
+  tools: Record<string, ReturnType<typeof llm.tool>>,
+) {
+  const agent = new voice.Agent({
+    instructions,
+    tools,
+  });
+
+  // Waterfall mode: buffer LLM tokens until stream completion, then synthesize complete text.
+  // Stream mode (default): LiveKit streams tokens directly into TTS synthesis in real-time.
+  if (config.TTS_MODE === "waterfall") {
+    const origTtsNode = agent.ttsNode.bind(agent);
+    agent.ttsNode = async (text, modelSettings) => {
+      if (text && typeof text === "object" && typeof (text as any).getReader === "function") {
+        const reader = (text as ReadableStream<string>).getReader();
+        let fullText = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (typeof value === "string") fullText += value;
+        }
+        const waterfallStream = new ReadableStream<string>({
+          start(controller) {
+            controller.enqueue(fullText);
+            controller.close();
+          },
+        });
+        return origTtsNode(waterfallStream, modelSettings);
+      }
+      return origTtsNode(text, modelSettings);
+    };
+  }
+
+  return agent;
+}
+
 function createSession(config: ReturnType<typeof loadConfig>, tools: Record<string, ReturnType<typeof llm.tool>>) {
   return new voice.AgentSession({
     stt: config.STT_MODEL as never,
     llm: config.LLM_MODEL as never,
-    tts: `${config.TTS_MODEL}:${config.TTS_VOICE}` as never,
+    tts: getTTSModelString(config) as never,
     tools,
     turnHandling: { interruption: { enabled: true } },
   });

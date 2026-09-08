@@ -7,9 +7,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       text,
-      provider = 'rime',
-      speaker = 'abbie',
-      modelId = 'mistv2',
+      provider = 'fish_audio',
+      speaker = 'default',
+      modelId = 's2.1-pro-free',
       speedAlpha = 1.0,
     } = body;
 
@@ -18,6 +18,77 @@ export async function POST(request: Request) {
     }
 
     const cleanText = text.trim();
+
+    if (provider === 'fish_audio') {
+      const apiKey = process.env.FISH_AUDIO_API_KEY || '';
+      const selectedModel = modelId || 's2.1-pro-free';
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        model: selectedModel,
+      };
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+
+      const fishRes = await fetch('https://api.fish.audio/v1/tts', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          text: cleanText,
+          format: 'mp3',
+          latency: 'low',
+        }),
+      });
+
+      if (fishRes.ok) {
+        const audioBuffer = await fishRes.arrayBuffer();
+        return new Response(audioBuffer, {
+          headers: {
+            'Content-Type': 'audio/mpeg',
+            'Content-Length': audioBuffer.byteLength.toString(),
+            'Cache-Control': 'no-cache',
+            'X-TTS-Provider': 'fish_audio',
+          },
+        });
+      }
+
+      // If Fish Audio requires an API key and user hasn't configured it yet, fallback to Rime
+      const rimeApiKey = process.env.RIME_API_KEY || '';
+      const rimeRes = await fetch('https://users.rime.ai/v1/rime-tts', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${rimeApiKey}`,
+          'Content-Type': 'application/json',
+          Accept: 'audio/mp3',
+        },
+        body: JSON.stringify({
+          text: cleanText,
+          speaker: 'abbie',
+          modelId: 'mistv2',
+          speedAlpha: 1.0,
+        }),
+      });
+
+      if (rimeRes.ok) {
+        const audioBuffer = await rimeRes.arrayBuffer();
+        return new Response(audioBuffer, {
+          headers: {
+            'Content-Type': 'audio/mpeg',
+            'Content-Length': audioBuffer.byteLength.toString(),
+            'Cache-Control': 'no-cache',
+            'X-TTS-Provider': 'rime-fallback',
+          },
+        });
+      }
+
+      const errText = await fishRes.text();
+      console.error('Fish Audio TTS error:', fishRes.status, errText);
+      return NextResponse.json(
+        { error: `Fish Audio TTS error: ${errText}` },
+        { status: fishRes.status }
+      );
+    }
 
     if (provider === 'rime') {
       const apiKey = process.env.RIME_API_KEY || '';

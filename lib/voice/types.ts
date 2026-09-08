@@ -1,6 +1,6 @@
 export type STTProvider = 'web_speech' | 'groq' | 'openai';
 export type LLMProvider = 'groq' | 'openai';
-export type TTSProvider = 'rime' | 'openai' | 'browser_speech';
+export type TTSProvider = 'fish_audio' | 'rime' | 'openai' | 'browser_speech';
 
 export interface VoiceConfig {
   stt: {
@@ -34,9 +34,9 @@ export const DEFAULT_VOICE_CONFIG: VoiceConfig = {
     stream: true,
   },
   tts: {
-    provider: 'rime',
-    speaker: 'abbie',
-    modelId: 'mistv2',
+    provider: 'fish_audio',
+    speaker: 'default',
+    modelId: 's2.1-pro-free',
     speedAlpha: 1.0,
     streamSSE: true,
   },

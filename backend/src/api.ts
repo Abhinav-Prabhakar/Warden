@@ -7,6 +7,7 @@ import { WebhookReceiver } from "livekit-server-sdk";
 import type { OperationsRepository } from "./ports/index.js";
 import type { DispatchResponseBroker } from "./telephony/response-broker.js";
 import { TransportWorkflow, WorkflowError } from "./workflow/transport-workflow.js";
+import { FishAudioTTSAdapter, RimeTTSAdapter } from "./adapters/tts.js";
 
 const taskParams = z.object({ id: z.string().uuid() });
 const wardParams = z.object({ id: z.string().uuid() });
@@ -36,9 +37,52 @@ export function buildApi(input: {
   app.addContentTypeParser("application/webhook+json", { parseAs: "string" }, (_request, body, done) => done(null, body));
 
   app.addHook("onRequest", async request => {
-    if (request.url === "/health" || request.url === "/api/calls/livekit/webhook") return;
+    if (request.url === "/health" || request.url === "/api/calls/livekit/webhook" || request.url.startsWith("/api/tts/")) return;
     if (request.headers.authorization !== `Bearer ${input.authToken}`) {
       throw Object.assign(new Error("Unauthorized"), { statusCode: 401 });
+    }
+  });
+
+  const ttsBody = z.object({
+    text: z.string().min(1),
+    provider: z.enum(["fish-audio", "rime"]).default("fish-audio"),
+    mode: z.enum(["stream", "waterfall"]).default("stream"),
+    model: z.string().optional(),
+    voice: z.string().optional(),
+  });
+
+  app.post("/api/tts/synthesize", async (request, reply) => {
+    const body = ttsBody.parse(request.body);
+    const adapter = body.provider === "fish-audio"
+      ? new FishAudioTTSAdapter({ model: body.model, voice: body.voice, mode: body.mode })
+      : new RimeTTSAdapter({ model: body.model, voice: body.voice, mode: body.mode });
+
+    reply.header("content-type", "audio/mpeg");
+    reply.header("x-tts-provider", body.provider);
+    reply.header("x-tts-mode", body.mode);
+
+    const stream = adapter.stream(body.text, { synthesisId: randomUUID() });
+    if (body.mode === "waterfall") {
+      const chunks: Uint8Array[] = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk.data);
+      }
+      const combined = Buffer.concat(chunks);
+      return reply.header("content-length", combined.length.toString()).send(combined);
+    } else {
+      const readable = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const chunk of stream) {
+              controller.enqueue(chunk.data);
+            }
+            controller.close();
+          } catch (e) {
+            controller.error(e);
+          }
+        },
+      });
+      return reply.send(readable);
     }
   });
 

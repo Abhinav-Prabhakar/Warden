@@ -19,9 +19,12 @@ const schema = z.object({
   STT_MODEL: z.string().default("deepgram/nova-3:en"),
   LLM_PROVIDER: z.enum(["livekit-inference", "mock"]).default("livekit-inference"),
   LLM_MODEL: z.string().default("groq/gpt-oss-120b"),
-  TTS_PROVIDER: z.enum(["rime", "mock"]).default("rime"),
-  TTS_MODEL: z.enum(["rime/coda", "rime/mist", "rime/mistv2", "rime/mistv3"]).default("rime/mistv2"),
-  TTS_VOICE: z.string().min(1).default("abbie"),
+  TTS_PROVIDER: z.enum(["fish-audio", "rime", "mock"]).default("fish-audio"),
+  TTS_MODEL: z.string().default("s2.1-pro-free"),
+  TTS_VOICE: z.string().min(1).default("default"),
+  TTS_MODE: z.enum(["stream", "waterfall"]).default("stream"),
+  FISH_AUDIO_API_KEY: z.string().optional(),
+  RIME_API_KEY: z.string().optional(),
   DISPATCH_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60_000).default(20_000),
 });
 
@@ -37,7 +40,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     const required = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "LIVEKIT_SIP_OUTBOUND_TRUNK_ID"] as const;
     const missing = required.filter(k => !value[k]);
     if (missing.length) throw new Error(`Missing production configuration: ${missing.join(", ")}`);
-    if (value.TTS_PROVIDER !== "rime") throw new Error("The judged production path must use Rime TTS.");
+    if (value.TTS_PROVIDER !== "rime" && value.TTS_PROVIDER !== "fish-audio") {
+      throw new Error("The live production path must use Fish Audio or Rime TTS.");
+    }
   }
   return value;
 }
