@@ -422,7 +422,8 @@ export class WardService {
    * Complete Bed-Level Drilldown
    */
   static async getBedDrilldown(bedId: string) {
-    const { data: bed, error } = await this.adminClient
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bedId);
+    let query = this.adminClient
       .from('beds')
       .select(`
         *,
@@ -452,9 +453,19 @@ export class WardService {
             contact:contacts (*)
           )
         )
-      `)
-      .eq('id', bedId)
-      .single();
+      `);
+
+    if (isUuid) {
+      query = query.eq('id', bedId);
+    } else {
+      // Allow searching by "Bed 1", "bed-top-1", etc.
+      const normalizedName = bedId.replace(/^bed-(?:top|b\d+(?:-[a-z]+)?)-?/i, '').replace(/^bed-/i, 'Bed ');
+      const cleanNum = bedId.match(/\d+/)?.[0];
+      const targetName = cleanNum ? `Bed ${cleanNum}` : bedId;
+      query = query.or(`bed_number.eq.${bedId},bed_number.eq.${targetName}`);
+    }
+
+    const { data: bed, error } = await query.limit(1).maybeSingle();
 
     if (error || !bed) {
       throw new Error(`Bed not found: ${bedId}`);
@@ -465,6 +476,7 @@ export class WardService {
     let activeTasks: any[] = [];
     let recentEvents: any[] = [];
     let dischargePlan: any = null;
+    let medications: any[] = [];
 
     if (bed.current_patient_id) {
       const { data: vitalsData } = await this.adminClient
@@ -501,9 +513,27 @@ export class WardService {
         .eq('patient_id', bed.current_patient_id)
         .order('planned_discharge_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       dischargePlan = dp;
+
+      const { data: medsData } = await this.adminClient
+        .from('patient_medications')
+        .select(`
+          *,
+          medication:medications (*),
+          medication_administrations (*)
+        `)
+        .eq('patient_id', bed.current_patient_id);
+      medications = medsData || [];
     }
+
+    const { data: cleaningJob } = await this.adminClient
+      .from('cleaning_jobs')
+      .select('*')
+      .eq('bed_id', bed.id)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     return {
       bed,
@@ -511,6 +541,8 @@ export class WardService {
       tasks: activeTasks,
       timeline: recentEvents,
       discharge_plan: dischargePlan,
+      medications,
+      cleaning_job: cleaningJob,
     };
   }
 }

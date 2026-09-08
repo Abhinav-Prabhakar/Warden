@@ -18,9 +18,14 @@ export async function POST(request: Request) {
     }
 
     const cleanText = text.trim();
+    const userApiKey =
+      body.apiKey ||
+      request.headers.get('x-fish-audio-api-key') ||
+      request.headers.get('x-rime-api-key') ||
+      request.headers.get('x-openai-api-key');
 
     if (provider === 'fish_audio') {
-      const apiKey = process.env.FISH_AUDIO_API_KEY || '';
+      const apiKey = userApiKey || process.env.FISH_AUDIO_API_KEY || '';
       const selectedModel = modelId || 's2.1-pro-free';
 
       const headers: Record<string, string> = {
@@ -91,7 +96,7 @@ export async function POST(request: Request) {
     }
 
     if (provider === 'rime') {
-      const apiKey = process.env.RIME_API_KEY || '';
+      const apiKey = userApiKey || process.env.RIME_API_KEY || '';
 
       const rimeRes = await fetch('https://users.rime.ai/v1/rime-tts', {
         method: 'POST',
@@ -126,7 +131,7 @@ export async function POST(request: Request) {
 
     // OpenAI TTS
     if (provider === 'openai') {
-      const apiKey = process.env.OPENAI_API_KEY;
+      const apiKey = userApiKey || process.env.OPENAI_API_KEY;
       if (!apiKey) {
         return NextResponse.json({ error: 'OPENAI_API_KEY is not configured' }, { status: 400 });
       }

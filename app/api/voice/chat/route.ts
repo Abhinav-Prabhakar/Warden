@@ -25,10 +25,17 @@ export async function POST(request: Request) {
       { role: 'user', content: message },
     ];
 
+    const userApiKey =
+      body.apiKey ||
+      (provider === 'openai'
+        ? request.headers.get('x-openai-api-key')
+        : request.headers.get('x-groq-api-key'));
+
     const apiKey =
-      provider === 'openai'
+      userApiKey ||
+      (provider === 'openai'
         ? process.env.OPENAI_API_KEY
-        : process.env.GROQ_API_KEY;
+        : process.env.GROQ_API_KEY);
 
     const endpoint =
       provider === 'openai'

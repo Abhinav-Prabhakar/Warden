@@ -2,6 +2,16 @@ export type STTProvider = 'web_speech' | 'groq' | 'openai';
 export type LLMProvider = 'groq' | 'openai';
 export type TTSProvider = 'fish_audio' | 'rime' | 'openai' | 'browser_speech';
 
+export interface ApiKeysConfig {
+  groq?: string;
+  openai?: string;
+  fishAudio?: string;
+  rime?: string;
+  livekitUrl?: string;
+  livekitApiKey?: string;
+  livekitApiSecret?: string;
+}
+
 export interface VoiceConfig {
   stt: {
     provider: STTProvider;
@@ -20,6 +30,7 @@ export interface VoiceConfig {
     speedAlpha: number;
     streamSSE: boolean;
   };
+  apiKeys: ApiKeysConfig;
 }
 
 export const DEFAULT_VOICE_CONFIG: VoiceConfig = {
@@ -39,5 +50,14 @@ export const DEFAULT_VOICE_CONFIG: VoiceConfig = {
     modelId: 's2.1-pro-free',
     speedAlpha: 1.0,
     streamSSE: true,
+  },
+  apiKeys: {
+    groq: '',
+    openai: '',
+    fishAudio: '',
+    rime: '',
+    livekitUrl: '',
+    livekitApiKey: '',
+    livekitApiSecret: '',
   },
 };

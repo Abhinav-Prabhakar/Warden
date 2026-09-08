@@ -31,9 +31,35 @@ export function VoiceSettingsModal({
 }: VoiceSettingsModalProps) {
   const [localConfig, setLocalConfig] = useState<VoiceConfig>(config);
 
+  React.useEffect(() => {
+    if (isOpen) {
+      try {
+        const savedKeys = localStorage.getItem("warden_api_keys");
+        const parsedKeys = savedKeys ? JSON.parse(savedKeys) : {};
+        setLocalConfig({
+          ...config,
+          apiKeys: {
+            ...config.apiKeys,
+            ...parsedKeys,
+          },
+        });
+      } catch (e) {
+        setLocalConfig(config);
+      }
+    }
+  }, [isOpen, config]);
+
   if (!isOpen) return null;
 
   const handleSave = () => {
+    try {
+      if (localConfig.apiKeys) {
+        localStorage.setItem("warden_api_keys", JSON.stringify(localConfig.apiKeys));
+      }
+      localStorage.setItem("warden_voice_config", JSON.stringify(localConfig));
+    } catch (e) {
+      console.warn("Failed to save to localStorage", e);
+    }
     onSave(localConfig);
     onClose();
   };
@@ -247,6 +273,91 @@ export function VoiceSettingsModal({
               </div>
             </div>
           )}
+        </div>
+
+        {/* API Keys Configuration Section (Saved to LocalStorage) */}
+        <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
+          <div className="flex items-center justify-between">
+            <label className="text-[11.5px] font-medium tracking-[0.04em] uppercase text-[#8E92A4]">
+              API Keys & Credentials
+            </label>
+            <span className="text-[10px] text-[#1ECCE6] font-mono bg-[#1ECCE6]/10 px-1.5 py-0.5 rounded border border-[#1ECCE6]/20">
+              LocalStorage
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-2.5 max-h-[160px] overflow-y-auto pr-1">
+            {/* Fish Audio API Key */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-[#C1C6D7] font-medium">Fish Audio API Key</span>
+              <input
+                type="password"
+                placeholder="s2.1-pro-free / custom key (optional)"
+                value={localConfig.apiKeys?.fishAudio || ""}
+                onChange={(e) =>
+                  setLocalConfig({
+                    ...localConfig,
+                    apiKeys: { ...localConfig.apiKeys, fishAudio: e.target.value },
+                  })
+                }
+                className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
+              />
+            </div>
+
+            {/* Groq API Key */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-[#C1C6D7] font-medium">Groq API Key (LLM / Whisper)</span>
+              <input
+                type="password"
+                placeholder="gsk_..."
+                value={localConfig.apiKeys?.groq || ""}
+                onChange={(e) =>
+                  setLocalConfig({
+                    ...localConfig,
+                    apiKeys: { ...localConfig.apiKeys, groq: e.target.value },
+                  })
+                }
+                className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
+              />
+            </div>
+
+            {/* OpenAI API Key */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-[#C1C6D7] font-medium">OpenAI API Key</span>
+              <input
+                type="password"
+                placeholder="sk-..."
+                value={localConfig.apiKeys?.openai || ""}
+                onChange={(e) =>
+                  setLocalConfig({
+                    ...localConfig,
+                    apiKeys: { ...localConfig.apiKeys, openai: e.target.value },
+                  })
+                }
+                className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
+              />
+            </div>
+
+            {/* Rime AI API Key */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-[#C1C6D7] font-medium">Rime AI API Key</span>
+              <input
+                type="password"
+                placeholder="rime_api_key or custom"
+                value={localConfig.apiKeys?.rime || ""}
+                onChange={(e) =>
+                  setLocalConfig({
+                    ...localConfig,
+                    apiKeys: { ...localConfig.apiKeys, rime: e.target.value },
+                  })
+                }
+                className="bg-black/40 border border-white/10 rounded-[8px] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5C6170] focus:border-[#1ECCE6]/50 outline-none"
+              />
+            </div>
+          </div>
+          <p className="text-[10px] text-[#6D7282]">
+            Stored locally in your browser. No .env configuration required.
+          </p>
         </div>
 
         {/* Action Buttons */}

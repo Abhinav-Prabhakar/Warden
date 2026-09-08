@@ -7,12 +7,21 @@ import { OrbState } from "thinking-orbs";
 export function useVoiceAgent() {
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("warden_voice_config");
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {}
-      }
+      try {
+        const saved = localStorage.getItem("warden_voice_config");
+        const savedKeys = localStorage.getItem("warden_api_keys");
+        const parsed = saved ? JSON.parse(saved) : {};
+        const parsedKeys = savedKeys ? JSON.parse(savedKeys) : {};
+        return {
+          ...DEFAULT_VOICE_CONFIG,
+          ...parsed,
+          apiKeys: {
+            ...DEFAULT_VOICE_CONFIG.apiKeys,
+            ...(parsed.apiKeys || {}),
+            ...parsedKeys,
+          },
+        };
+      } catch (e) {}
     }
     return DEFAULT_VOICE_CONFIG;
   });
@@ -40,7 +49,14 @@ export function useVoiceAgent() {
   const updateConfig = useCallback((newConfig: VoiceConfig) => {
     setVoiceConfig(newConfig);
     if (typeof window !== "undefined") {
-      localStorage.setItem("warden_voice_config", JSON.stringify(newConfig));
+      try {
+        localStorage.setItem("warden_voice_config", JSON.stringify(newConfig));
+        if (newConfig.apiKeys) {
+          localStorage.setItem("warden_api_keys", JSON.stringify(newConfig.apiKeys));
+        }
+      } catch (e) {
+        console.warn("Failed to persist voice config", e);
+      }
     }
   }, []);
 
@@ -121,15 +137,28 @@ export function useVoiceAgent() {
           return;
         }
 
+        const activeTTSKey =
+          voiceConfig.tts.provider === "fish_audio"
+            ? voiceConfig.apiKeys?.fishAudio
+            : voiceConfig.tts.provider === "rime"
+            ? voiceConfig.apiKeys?.rime
+            : voiceConfig.apiKeys?.openai;
+
         const res = await fetch("/api/voice/tts", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(voiceConfig.apiKeys?.fishAudio ? { "x-fish-audio-api-key": voiceConfig.apiKeys.fishAudio } : {}),
+            ...(voiceConfig.apiKeys?.rime ? { "x-rime-api-key": voiceConfig.apiKeys.rime } : {}),
+            ...(voiceConfig.apiKeys?.openai ? { "x-openai-api-key": voiceConfig.apiKeys.openai } : {}),
+          },
           body: JSON.stringify({
             text,
             provider: voiceConfig.tts.provider,
             speaker: voiceConfig.tts.speaker,
             modelId: voiceConfig.tts.modelId,
             speedAlpha: voiceConfig.tts.speedAlpha,
+            apiKey: activeTTSKey,
           }),
         });
 
@@ -167,14 +196,24 @@ export function useVoiceAgent() {
       let sentenceBuffer = "";
 
       try {
+        const activeLLMKey =
+          voiceConfig.llm.provider === "openai"
+            ? voiceConfig.apiKeys?.openai
+            : voiceConfig.apiKeys?.groq;
+
         const response = await fetch("/api/voice/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(voiceConfig.apiKeys?.groq ? { "x-groq-api-key": voiceConfig.apiKeys.groq } : {}),
+            ...(voiceConfig.apiKeys?.openai ? { "x-openai-api-key": voiceConfig.apiKeys.openai } : {}),
+          },
           body: JSON.stringify({
             message: cleanInput,
             provider: voiceConfig.llm.provider,
             model: voiceConfig.llm.model,
             stream: voiceConfig.llm.stream,
+            apiKey: activeLLMKey,
           }),
         });
 
