@@ -18,24 +18,43 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    if (!body.documentTitle || !body.documentType || !body.requestedBy) {
+    if (!body.documentTitle || !body.documentType) {
       return NextResponse.json(
-        { error: 'documentTitle, documentType, and requestedBy are required' },
+        { error: 'documentTitle and documentType are required' },
         { status: 400 }
       );
     }
 
+    const admin = createAdminClient();
     let hospitalId = body.hospitalId;
     if (!hospitalId) {
-      const admin = createAdminClient();
       const { data } = await admin.from('hospitals').select('id').limit(1).single();
       hospitalId = data?.id;
+    }
+
+    let requestedBy = body.requestedBy;
+    if (!requestedBy) {
+      const { data } = await admin
+        .from('staff')
+        .select('id')
+        .eq('is_on_duty', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      requestedBy = data?.id;
+    }
+
+    if (!hospitalId || !requestedBy) {
+      return NextResponse.json(
+        { error: 'No hospital or on-duty staff member is configured for this action' },
+        { status: 409 }
+      );
     }
 
     const result = await PrintService.queuePrintJob({
       printerId: body.printerId,
       hospitalId,
-      requestedBy: body.requestedBy,
+      requestedBy,
       patientId: body.patientId,
       taskId: body.taskId,
       documentType: body.documentType,

@@ -15,6 +15,7 @@ import { IncomingAdmissionsCard } from "@/app/components/IncomingAdmissionsCard"
 
 interface BedOverlay {
   id: string;
+  patientId?: string;
   name: string;
   color: "green" | "orange" | "red";
   leftPct: number;
@@ -352,6 +353,7 @@ export default function WardenMainScreen() {
   const [bedsLoading, setBedsLoading] = useState<boolean>(true);
   const [bedsError, setBedsError] = useState<string | null>(null);
   const [selectedBed, setSelectedBed] = useState<BedOverlay | null>(null);
+  const [bedAction, setBedAction] = useState<{ kind: "idle" | "working" | "success" | "error"; message: string }>({ kind: "idle", message: "" });
 
   // Live Pharmacy items state from Supabase
   const [shelfItems, setShelfItems] = useState<ShelfItem[]>([]);
@@ -415,6 +417,7 @@ export default function WardenMainScreen() {
 
             return {
               id: b.id,
+              patientId: pat?.id,
               name: `Bed ${b.bed_number || idx + 1}`,
               color: b.color,
               leftPct: geom.leftPct,
@@ -653,6 +656,53 @@ export default function WardenMainScreen() {
     };
   }
   const noticeTheme = operationalNotice ? NOTICE_THEME[operationalNotice.type] : null;
+
+  const runBedAction = async (action: "porter" | "print") => {
+    if (!selectedBed) return;
+    setBedAction({ kind: "working", message: action === "porter" ? "Recording porter request…" : "Adding paperwork to print queue…" });
+
+    try {
+      const response = action === "porter"
+        ? await fetch("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              patientId: selectedBed.patientId,
+              taskType: "transport",
+              title: `Porter requested for ${selectedBed.name}`,
+              description: `Ward UI request for patient movement from ${selectedBed.name}`,
+              urgency: selectedBed.operational?.urgency === "stat" ? "stat" : "urgent",
+              priority: selectedBed.operational?.urgency === "stat" ? 1 : 2,
+              source: "ui",
+            }),
+          })
+        : await fetch("/api/print-queue", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              patientId: selectedBed.patientId,
+              documentType: "discharge_summary",
+              documentTitle: `${selectedBed.name} clinical discharge summary`,
+              priority: 2,
+              duplex: true,
+            }),
+          });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `Action failed with HTTP ${response.status}`);
+
+      const persistedId = action === "porter" ? result.id : result.job?.id;
+      if (!persistedId) throw new Error("The server did not return a persisted record ID");
+      setBedAction({
+        kind: "success",
+        message: action === "porter"
+          ? `Porter task recorded · ${persistedId.slice(0, 8)}`
+          : `${result.duplicatePrevented ? "Already queued" : "Print job queued"} · ${persistedId.slice(0, 8)}`,
+      });
+    } catch (error) {
+      setBedAction({ kind: "error", message: error instanceof Error ? error.message : "Action failed" });
+    }
+  };
 
   return (
     <main
@@ -1317,13 +1367,24 @@ export default function WardenMainScreen() {
                 )}
 
                 {/* Footer actions */}
+                {bedAction.kind !== "idle" && (
+                  <div
+                    className="rounded-[8px] border px-[9px] py-[6px] text-[9.5px] font-medium"
+                    style={{
+                      color: bedAction.kind === "error" ? "#FF9DB2" : bedAction.kind === "success" ? "#82D99E" : "#A6ACBE",
+                      borderColor: bedAction.kind === "error" ? "#E61E6740" : bedAction.kind === "success" ? "#24A95140" : "#FFFFFF18",
+                      background: bedAction.kind === "error" ? "#E61E6712" : bedAction.kind === "success" ? "#24A95112" : "#FFFFFF08",
+                    }}
+                  >
+                    {bedAction.message}
+                  </div>
+                )}
                 <div className="flex items-center pt-[9px] border-t border-white/[0.08]">
                   <div className="flex items-center gap-[7px]">
                     <button
                       type="button"
-                      onClick={() => {
-                        alert(`Transporter dispatch request sent for ${selectedBed.name}`);
-                      }}
+                      onClick={() => runBedAction("porter")}
+                      disabled={bedAction.kind === "working"}
                       className="flex items-center gap-[5px] px-[10px] h-[28px] rounded-[8px] bg-white/[0.06] hover:bg-white/[0.12] active:scale-[0.97] border border-white/10 hover:border-white/20 text-[10.5px] font-medium text-[#C9CEDC] transition-all"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1334,9 +1395,8 @@ export default function WardenMainScreen() {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        if (selectedBed) alert(`Printing clinical discharge paperwork for ${selectedBed.name}`);
-                      }}
+                      onClick={() => runBedAction("print")}
+                      disabled={bedAction.kind === "working"}
                       className="flex items-center gap-[5px] px-[10px] h-[28px] rounded-[8px] bg-white/[0.06] hover:bg-white/[0.12] active:scale-[0.97] border border-white/10 hover:border-white/20 text-[10.5px] font-medium text-[#C9CEDC] transition-all"
                       title="Print Summary"
                     >
