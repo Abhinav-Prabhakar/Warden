@@ -26,48 +26,48 @@ const BED_RECTANGLES: BedOverlay[] = [
     name: "Bed 1",
     color: "green",
     leftPct: 14.55,
-    topPct: 11.15,
-    widthPct: 3.32,
-    heightPct: 13.94,
+    topPct: 10.8,
+    widthPct: 3.2,
+    heightPct: 14.2,
     patientName: "Meera Patel",
     patientAgeGender: "36F",
-    statusText: "READY",
+    statusText: "DOING WELL",
   },
   {
     id: "bed-top-3",
     name: "Bed 2",
     color: "orange",
-    leftPct: 50.0,
-    topPct: 11.15,
-    widthPct: 3.32,
-    heightPct: 13.94,
-    patientName: "Arjun Kumar",
-    patientAgeGender: "23M",
-    statusText: "CLEANING",
+    leftPct: 49.9,
+    topPct: 10.45,
+    widthPct: 3.65,
+    heightPct: 14.5,
+    patientName: "Terminal Disinfection",
+    patientAgeGender: "Facilities",
+    statusText: "TASK PENDING",
   },
   {
     id: "bed-top-4",
     name: "Bed 3",
     color: "red",
     leftPct: 68.16,
-    topPct: 11.0,
-    widthPct: 3.32,
-    heightPct: 13.94,
+    topPct: 10.6,
+    widthPct: 3.45,
+    heightPct: 14.5,
     patientName: "Vikram Malhotra",
     patientAgeGender: "62M",
-    statusText: "CRITICAL",
+    statusText: "DANGER / STAT",
   },
   {
     id: "bed-top-5",
     name: "Bed 4",
     color: "orange",
-    leftPct: 86.91,
-    topPct: 11.15,
-    widthPct: 3.22,
-    heightPct: 13.94,
+    leftPct: 86.72,
+    topPct: 10.6,
+    widthPct: 3.45,
+    heightPct: 14.5,
     patientName: "Ramesh Gupta",
     patientAgeGender: "54M",
-    statusText: "BLOCKED",
+    statusText: "TASK PENDING",
   },
 
   // Bottom Row
@@ -77,24 +77,24 @@ const BED_RECTANGLES: BedOverlay[] = [
     name: "Bed 5",
     color: "green",
     leftPct: 7.03,
-    topPct: 67.42,
-    widthPct: 8.01,
-    heightPct: 6.27,
+    topPct: 67.5,
+    widthPct: 8.2,
+    heightPct: 6.2,
     patientName: "Siddharth Sen",
     patientAgeGender: "41M",
-    statusText: "STABLE",
+    statusText: "DOING WELL",
   },
   {
     id: "bed-b1-v",
     name: "Bed 6",
     color: "green",
-    leftPct: 9.38,
+    leftPct: 9.3,
     topPct: 75.96,
-    widthPct: 3.32,
-    heightPct: 14.63,
+    widthPct: 3.35,
+    heightPct: 14.7,
     patientName: "Sunita Reddy",
     patientAgeGender: "29F",
-    statusText: "OBSERVATION",
+    statusText: "DOING WELL",
   },
 
   // Room 2 (bottom second)
@@ -102,13 +102,13 @@ const BED_RECTANGLES: BedOverlay[] = [
     id: "bed-b2-h",
     name: "Bed 7",
     color: "orange",
-    leftPct: 18.65,
-    topPct: 67.07,
-    widthPct: 7.81,
-    heightPct: 6.27,
+    leftPct: 18.5,
+    topPct: 66.9,
+    widthPct: 8.15,
+    heightPct: 6.35,
     patientName: "Ananya Rao",
     patientAgeGender: "69F",
-    statusText: "ATTENTION",
+    statusText: "TASK PENDING",
   },
   {
     id: "bed-b2-v",
@@ -117,10 +117,10 @@ const BED_RECTANGLES: BedOverlay[] = [
     leftPct: 23.05,
     topPct: 76.13,
     widthPct: 3.32,
-    heightPct: 14.63,
+    heightPct: 14.7,
     patientName: "Kavita Desai",
     patientAgeGender: "45F",
-    statusText: "STABLE",
+    statusText: "DOING WELL",
   },
 
   // Room 3 (bottom third)
@@ -131,10 +131,10 @@ const BED_RECTANGLES: BedOverlay[] = [
     leftPct: 30.96,
     topPct: 76.13,
     widthPct: 3.32,
-    heightPct: 14.63,
+    heightPct: 14.7,
     patientName: "Devansh Nair",
     patientAgeGender: "51M",
-    statusText: "RECOVERY",
+    statusText: "DOING WELL",
   },
 
   // Room 5 (bottom right room)
@@ -142,25 +142,25 @@ const BED_RECTANGLES: BedOverlay[] = [
     id: "bed-b5-left",
     name: "Bed 10",
     color: "orange",
-    leftPct: 52.73,
-    topPct: 76.13,
-    widthPct: 3.32,
-    heightPct: 14.63,
+    leftPct: 52.54,
+    topPct: 75.8,
+    widthPct: 3.75,
+    heightPct: 14.7,
     patientName: "Pooja Hegde",
     patientAgeGender: "34F",
-    statusText: "DISCHARGE",
+    statusText: "TASK PENDING",
   },
   {
     id: "bed-b5-right",
     name: "Bed 11",
     color: "green",
     leftPct: 64.84,
-    topPct: 75.96,
-    widthPct: 3.32,
-    heightPct: 14.63,
+    topPct: 75.6,
+    widthPct: 3.25,
+    heightPct: 14.7,
     patientName: "Harish Iyer",
     patientAgeGender: "58M",
-    statusText: "STABLE",
+    statusText: "DOING WELL",
   },
 ];
 
@@ -408,31 +408,43 @@ export default function WardenMainScreen() {
     : isCritical ? "158/98" : "120/80";
   const vitalsTemp = latestVitals?.temperature || (isCritical ? 38.2 : 36.8);
 
-  // Operational notice
+  const activeTask = drilldownData?.tasks?.[0];
+  const hasTask = Boolean(activeTask && activeTask.status !== "completed") || selectedBed.color === "orange";
+
+  // Operational notice reflecting:
+  // - RED: Danger & priority test
+  // - ORANGE: Task you have to do there
+  // - GREEN: Patient is doing well
   let operationalNotice: { type: "blocker" | "alert" | "info" | "success"; text: string; icon: string } | null = null;
-  if (isBlocked || drilldownData?.discharge_plan?.status === "delayed") {
-    operationalNotice = {
-      type: "blocker",
-      icon: "⚠️",
-      text: drilldownData?.discharge_plan?.notes || "Discharge blocked: awaiting attending signature and pharmacy dispensing",
-    };
-  } else if (isCritical) {
+  if (isCritical) {
     operationalNotice = {
       type: "alert",
       icon: "🚨",
-      text: "Acute vitals deterioration • STAT Doctor Review & 12-lead ECG",
+      text: activeTask?.title ? `DANGER • ${activeTask.title}` : "DANGER: Critical vitals deterioration • STAT Doctor Review & 12-lead ECG",
     };
-  } else if (isCleaning || drilldownData?.cleaning_job?.status === "in_progress") {
+  } else if (isCleaning || drilldownData?.cleaning_job?.status === "in_progress" || selectedBed.name === "Bed 2") {
     operationalNotice = {
       type: "info",
       icon: "🧹",
-      text: "Terminal disinfection in progress • Started 8m ago • Assigned: Facilities",
+      text: "Task Pending • Terminal disinfection & UV-C decontamination (Facilities)",
     };
-  } else if (selectedBed.statusText === "READY" || drilldownData?.discharge_plan?.status === "ready") {
+  } else if (activeTask) {
+    operationalNotice = {
+      type: "blocker",
+      icon: "📋",
+      text: `Task Pending • ${activeTask.title}`,
+    };
+  } else if (isBlocked || drilldownData?.discharge_plan?.status === "delayed") {
+    operationalNotice = {
+      type: "blocker",
+      icon: "⚠️",
+      text: drilldownData?.discharge_plan?.notes || "Task Pending • Discharge blocked: awaiting attending signature",
+    };
+  } else {
     operationalNotice = {
       type: "success",
       icon: "✅",
-      text: "Medically cleared • Discharge summary printed • Family in lobby",
+      text: "Patient doing well • All scheduled care complete • Vitals stable",
     };
   }
 
@@ -493,7 +505,7 @@ export default function WardenMainScreen() {
         {/* =====================================================================
             SCREEN 1: GENERAL WARD (Takes entire viewport w-screen h-screen)
            ===================================================================== */}
-        <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-start">
+        <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
           <div className="relative h-full aspect-[2750/1536] max-w-none shrink-0">
             {/* Base 3D Ward Render */}
             <div className="absolute inset-0 w-full h-full">
@@ -503,7 +515,7 @@ export default function WardenMainScreen() {
                 fill
                 priority
                 sizes="100vw"
-                className="object-cover object-left pointer-events-none"
+                className="object-cover object-center pointer-events-none"
               />
             </div>
 
@@ -610,14 +622,16 @@ export default function WardenMainScreen() {
                       className={`text-[9.5px] font-semibold tracking-[0.06em] uppercase px-2 py-0.5 rounded-full border ${
                         isCritical
                           ? "bg-red-500/20 border-red-500/40 text-red-300"
-                          : isBlocked
+                          : selectedBed.color === "orange" || hasTask || isBlocked || isCleaning
                           ? "bg-orange-500/20 border-orange-500/40 text-orange-300"
-                          : isCleaning
-                          ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
                           : "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
                       }`}
                     >
-                      {selectedBed.statusText}
+                      {isCritical
+                        ? "DANGER / STAT"
+                        : selectedBed.color === "orange" || hasTask || isCleaning || isBlocked
+                        ? "TASK PENDING"
+                        : "DOING WELL"}
                     </span>
                   </div>
                   <span className="text-[#8E92A4] text-[11px] font-medium">
@@ -793,7 +807,7 @@ export default function WardenMainScreen() {
         {/* =====================================================================
             SCREEN 2: PHARMACY SHELF (Takes entire viewport w-screen h-screen)
            ===================================================================== */}
-        <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-start">
+        <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
           <div className="relative h-full aspect-[2760/1840] max-w-none shrink-0">
             {/* Base 3D Shelf Render */}
             <div className="absolute inset-0 w-full h-full">
@@ -803,7 +817,7 @@ export default function WardenMainScreen() {
                 fill
                 priority
                 sizes="100vw"
-                className="object-cover object-left pointer-events-none"
+                className="object-cover object-center pointer-events-none"
               />
             </div>
 

@@ -525,6 +525,19 @@ export class WardService {
         `)
         .eq('patient_id', bed.current_patient_id);
       medications = medsData || [];
+    } else {
+      // Bed without patient (e.g. cleaning bed) - fetch tasks associated by bed number
+      const { data: bedTasks } = await this.adminClient
+        .from('tasks')
+        .select(`
+          *,
+          task_assignments (
+            staff:staff (display_name, role)
+          )
+        `)
+        .ilike('title', `%${bed.bed_number}%`)
+        .order('created_at', { ascending: false });
+      activeTasks = bedTasks || [];
     }
 
     const { data: cleaningJob } = await this.adminClient

@@ -25,7 +25,10 @@ async function seed() {
   const { data: staff } = await supabase.from('staff').select('id').limit(1).single();
   const staffId = staff?.id;
 
-  // 11 Bed Definitions matching the UI
+  // 11 Bed Definitions matching the UI and color semantics:
+  // - GREEN: Patient is doing well (stable, no pending tasks)
+  // - ORANGE: Task you have to do there (cleaning, blocked discharge, transport, medication handover)
+  // - RED: Danger and priority test (critical deterioration, STAT ECG & review)
   const BEDS_DATA = [
     {
       bed_number: 'Bed 1',
@@ -44,11 +47,11 @@ async function seed() {
         blood_type: 'AB-',
         acuity: 'stable',
         status: 'admitted',
-        condition: 'Bacterial Pneumonia - Resolving',
+        condition: 'Bacterial Pneumonia - Fully Resolved',
         severity: 'mild',
         vitals: { hr: 74, rr: 16, spo2: 98, temp: 36.6, sbp: 118, dbp: 76, pain: 0 },
-        task: { title: 'Print discharge paperwork & prescription', type: 'discharge', urgency: 'routine', status: 'pending' },
-        discharge: { status: 'ready', notes: 'Medically cleared. Paperwork printing at central station.' }
+        task: null, // Green: doing well, no pending tasks
+        discharge: { status: 'ready', notes: 'Medically cleared. Patient doing well, discharge instructions provided.' }
       }
     },
     {
@@ -60,7 +63,8 @@ async function seed() {
       oxygen_available: true,
       monitor_available: false,
       patient: null,
-      cleaning: { status: 'in_progress', started_at: new Date(Date.now() - 8 * 60 * 1000).toISOString() }
+      cleaning: { status: 'in_progress', started_at: new Date(Date.now() - 8 * 60 * 1000).toISOString() },
+      task: { title: 'Terminal disinfection & UV-C decontamination', type: 'cleaning', urgency: 'urgent', status: 'pending' }
     },
     {
       bed_number: 'Bed 3',
@@ -82,7 +86,7 @@ async function seed() {
         condition: 'Unstable Angina / Deteriorating',
         severity: 'severe',
         vitals: { hr: 118, rr: 28, spo2: 90, temp: 38.2, sbp: 158, dbp: 98, pain: 8 },
-        task: { title: 'STAT Doctor Review & 12-lead ECG', type: 'assessment', urgency: 'stat', status: 'overdue' },
+        task: { title: 'STAT Doctor Review & 12-lead ECG', type: 'doctor_review', urgency: 'stat', status: 'pending' },
         discharge: null
       }
     },
@@ -103,11 +107,11 @@ async function seed() {
         blood_type: 'A+',
         acuity: 'stable',
         status: 'admitted',
-        condition: 'Post Left Knee Arthroplasty',
+        condition: 'Post Left Knee Arthroplasty - Discharge Blocked',
         severity: 'mild',
-        vitals: { hr: 80, rr: 18, spo2: 96, temp: 37.0, sbp: 130, dbp: 84, pain: 3 },
-        task: { title: 'Awaiting Attending Dr Shah discharge sign-off', type: 'discharge', urgency: 'urgent', status: 'blocked' },
-        discharge: { status: 'delayed', notes: 'Discharge blocked: awaiting attending signature and pharmacy dispensing' }
+        vitals: { hr: 80, rr: 18, spo2: 96, temp: 37.0, sbp: 130, dbp: 84, pain: 2 },
+        task: { title: 'Awaiting Attending Dr Shah discharge sign-off & SNF bed', type: 'discharge', urgency: 'urgent', status: 'pending' },
+        discharge: { status: 'delayed', notes: 'Discharge blocked: awaiting attending signature and SNF facility bed confirmation' }
       }
     },
     {
@@ -127,10 +131,10 @@ async function seed() {
         blood_type: 'O+',
         acuity: 'stable',
         status: 'admitted',
-        condition: 'Appendectomy Post-Op Day 1',
+        condition: 'Appendectomy Post-Op - Healing Well',
         severity: 'mild',
-        vitals: { hr: 72, rr: 16, spo2: 99, temp: 36.8, sbp: 122, dbp: 78, pain: 2 },
-        task: { title: 'IV Paracetamol 1g scheduled at 04:00', type: 'medication', urgency: 'routine', status: 'scheduled' },
+        vitals: { hr: 72, rr: 16, spo2: 99, temp: 36.8, sbp: 122, dbp: 78, pain: 1 },
+        task: null, // Green: doing well
         discharge: null
       }
     },
@@ -149,12 +153,12 @@ async function seed() {
         dob: '1995-12-08',
         sex: 'F',
         blood_type: 'A-',
-        acuity: 'needs_attention',
+        acuity: 'stable',
         status: 'admitted',
-        condition: 'Complicated Migraine / Rule-out TIA',
-        severity: 'moderate',
-        vitals: { hr: 68, rr: 15, spo2: 99, temp: 36.7, sbp: 110, dbp: 70, pain: 5 },
-        task: { title: 'Neurology bedside assessment', type: 'assessment', urgency: 'routine', status: 'pending' },
+        condition: 'Complicated Migraine - Symptoms Resolved',
+        severity: 'mild',
+        vitals: { hr: 68, rr: 15, spo2: 99, temp: 36.7, sbp: 110, dbp: 70, pain: 0 },
+        task: null, // Green: doing well
         discharge: null
       }
     },
@@ -175,10 +179,10 @@ async function seed() {
         blood_type: 'O+',
         acuity: 'needs_attention',
         status: 'admitted',
-        condition: 'COPD with Acute Exacerbation',
+        condition: 'COPD with Active Transport Requirement',
         severity: 'moderate',
         vitals: { hr: 92, rr: 22, spo2: 91, temp: 37.2, sbp: 138, dbp: 86, pain: 1 },
-        task: { title: 'Wheelchair Porter to CT Suite 1 (Pending O2 cylinder)', type: 'transport', urgency: 'urgent', status: 'blocked' },
+        task: { title: 'Wheelchair Porter to CT Suite 1 (Dispatch porter & attach portable O2)', type: 'transport', urgency: 'urgent', status: 'pending' },
         discharge: null
       }
     },
@@ -199,10 +203,10 @@ async function seed() {
         blood_type: 'O-',
         acuity: 'stable',
         status: 'admitted',
-        condition: 'Acute Abdominal Pain Investigation',
+        condition: 'Abdominal Pain - Observation Complete, Doing Well',
         severity: 'mild',
-        vitals: { hr: 76, rr: 17, spo2: 98, temp: 36.9, sbp: 120, dbp: 75, pain: 4 },
-        task: { title: 'Fasting ultrasound scheduled 08:00', type: 'procedure', urgency: 'routine', status: 'scheduled' },
+        vitals: { hr: 74, rr: 16, spo2: 98, temp: 36.9, sbp: 120, dbp: 75, pain: 0 },
+        task: null, // Green: doing well
         discharge: null
       }
     },
@@ -223,10 +227,10 @@ async function seed() {
         blood_type: 'B-',
         acuity: 'stable',
         status: 'admitted',
-        condition: 'Right Tibia Closed Reduction Recovery',
+        condition: 'Right Tibia Closed Reduction - Healing Well',
         severity: 'mild',
-        vitals: { hr: 70, rr: 16, spo2: 98, temp: 36.5, sbp: 124, dbp: 80, pain: 2 },
-        task: { title: 'Check extremity neurovascular status', type: 'assessment', urgency: 'routine', status: 'pending' },
+        vitals: { hr: 70, rr: 16, spo2: 98, temp: 36.5, sbp: 124, dbp: 80, pain: 1 },
+        task: null, // Green: doing well
         discharge: null
       }
     },
@@ -247,10 +251,10 @@ async function seed() {
         blood_type: 'A+',
         acuity: 'stable',
         status: 'admitted',
-        condition: 'Acute Pyelonephritis - Resolved',
+        condition: 'Acute Pyelonephritis - Discharge In-Progress',
         severity: 'mild',
         vitals: { hr: 72, rr: 16, spo2: 99, temp: 36.6, sbp: 116, dbp: 74, pain: 0 },
-        task: { title: 'Family escort arrival & final checkout', type: 'discharge', urgency: 'routine', status: 'pending' },
+        task: { title: 'Hand over take-home medications & escort family to checkout', type: 'discharge', urgency: 'routine', status: 'pending' },
         discharge: { status: 'ready', notes: 'Medications dispensed, waiting for family in ground floor reception' }
       }
     },
@@ -271,10 +275,10 @@ async function seed() {
         blood_type: 'AB+',
         acuity: 'stable',
         status: 'admitted',
-        condition: 'DKA - Resolved, SubQ Sliding Scale',
+        condition: 'DKA - Fully Resolved, Glycemia Stabilized',
         severity: 'mild',
-        vitals: { hr: 78, rr: 16, spo2: 97, temp: 36.8, sbp: 132, dbp: 82, pain: 1 },
-        task: { title: 'Bedside capillary blood glucose check', type: 'assessment', urgency: 'routine', status: 'pending' },
+        vitals: { hr: 74, rr: 16, spo2: 98, temp: 36.7, sbp: 120, dbp: 78, pain: 0 },
+        task: null, // Green: doing well
         discharge: null
       }
     }
@@ -330,6 +334,10 @@ async function seed() {
           status: 'active',
           severity: p.severity,
         });
+
+        // Clear previous tasks for this patient before seeding fresh
+        await supabase.from('tasks').delete().eq('patient_id', patientId);
+        await supabase.from('discharge_plans').delete().eq('patient_id', patientId);
 
         // Insert task if any
         if (p.task) {
@@ -395,6 +403,32 @@ async function seed() {
           monitor_available: bedData.monitor_available,
           current_patient_id: patientId,
         });
+    }
+
+    const actualBedId = existingBed?.id || (await supabase.from('beds').select('id').eq('bed_number', bedData.bed_number).single()).data?.id;
+
+    if (bedData.cleaning && actualBedId) {
+      await supabase.from('cleaning_jobs').delete().eq('bed_id', actualBedId);
+      await supabase.from('cleaning_jobs').insert({
+        bed_id: actualBedId,
+        status: bedData.cleaning.status,
+        priority: 1,
+        started_at: bedData.cleaning.started_at,
+        requested_at: new Date().toISOString(),
+      });
+    }
+
+    if (!bedData.patient && bedData.task) {
+      await supabase.from('tasks').delete().ilike('title', `%${bedData.bed_number}%`);
+      await supabase.from('tasks').insert({
+        hospital_id: hospitalId,
+        task_type: bedData.task.type,
+        title: `${bedData.task.title} (${bedData.bed_number})`,
+        priority: bedData.task.urgency === 'stat' ? 1 : 2,
+        urgency: bedData.task.urgency,
+        status: bedData.task.status,
+        due_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      });
     }
 
     console.log(`✓ Seeded ${bedData.bed_number}: ${bedData.status} - Patient: ${bedData.patient ? bedData.patient.first_name + ' ' + bedData.patient.last_name : 'None'}`);

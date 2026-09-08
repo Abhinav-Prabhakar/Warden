@@ -42,20 +42,25 @@ body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
   filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.15));
 }
 
-/* User-Specified Bed Glows (Ward Screen) */
+/* User-Specified Bed Glows (Ward Screen)
+   Drop shadow: blur 250, spread 80, opacity 25%
+   Green: #24A951, 50% opacity (Patient is doing well)
+   Orange: #E67F1E, 50% opacity (Task you have to do there)
+   Red: #E61E1E, 50% opacity (Danger / priority test)
+*/
 .bed-glow-green {
-  background-color: rgba(30, 230, 57, 0.20);
-  box-shadow: 0 0 250px 80px rgba(30, 230, 57, 0.10);
+  background-color: rgba(36, 169, 81, 0.50);
+  box-shadow: 0 0 250px 80px rgba(36, 169, 81, 0.25), 0 0 24px 4px rgba(36, 169, 81, 0.35);
 }
 
 .bed-glow-orange {
   background-color: rgba(230, 127, 30, 0.50);
-  box-shadow: 0 0 250px 80px rgba(230, 127, 30, 0.25);
+  box-shadow: 0 0 250px 80px rgba(230, 127, 30, 0.25), 0 0 24px 4px rgba(230, 127, 30, 0.35);
 }
 
 .bed-glow-red {
-  background-color: rgba(230, 30, 30, 0.40);
-  box-shadow: 0 0 250px 80px rgba(230, 30, 30, 0.20);
+  background-color: rgba(230, 30, 30, 0.50);
+  box-shadow: 0 0 250px 80px rgba(230, 30, 30, 0.25), 0 0 24px 4px rgba(230, 30, 30, 0.35);
 }
 
 /* User-Specified Shelf Glows (Pharmacy Screen)
@@ -67,22 +72,22 @@ body, button, input, select, textarea, div, span, p, h1, h2, h3, h4, h5, h6 {
 */
 .shelf-glow-cyan {
   background-color: rgba(30, 204, 230, 0.50);
-  box-shadow: 0 0 250px 80px rgba(30, 204, 230, 0.25);
+  box-shadow: 0 0 250px 80px rgba(30, 204, 230, 0.25), 0 0 24px 4px rgba(30, 204, 230, 0.35);
 }
 
 .shelf-glow-green {
   background-color: rgba(36, 169, 81, 0.50);
-  box-shadow: 0 0 250px 80px rgba(36, 169, 81, 0.25);
+  box-shadow: 0 0 250px 80px rgba(36, 169, 81, 0.25), 0 0 24px 4px rgba(36, 169, 81, 0.35);
 }
 
 .shelf-glow-orange {
   background-color: rgba(230, 127, 30, 0.50);
-  box-shadow: 0 0 250px 80px rgba(230, 127, 30, 0.25);
+  box-shadow: 0 0 250px 80px rgba(230, 127, 30, 0.25), 0 0 24px 4px rgba(230, 127, 30, 0.35);
 }
 
 .shelf-glow-magenta {
   background-color: rgba(230, 30, 103, 0.50);
-  box-shadow: 0 0 250px 80px rgba(230, 30, 103, 0.25);
+  box-shadow: 0 0 250px 80px rgba(230, 30, 103, 0.25), 0 0 24px 4px rgba(230, 30, 103, 0.35);
 }
 
 /* Shelf Light Fixture Glow
