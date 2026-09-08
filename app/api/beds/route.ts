@@ -114,11 +114,11 @@ export async function GET(request: Request) {
           .in('patient_id', patientIds)
           .in('status', ['planning', 'ready', 'delayed'])
           .order('planned_discharge_at', { ascending: true }),
-        admin
-          .from('transport_requests')
-          .select('*, assigned_staff:staff!transport_requests_assigned_staff_id_fkey(id, first_name, last_name, role)')
+        (admin as any)
+          .from('transport_tasks')
+          .select('*, assigned_staff:staff!transport_tasks_assigned_staff_id_fkey(id, first_name, last_name, role)')
           .in('patient_id', patientIds)
-          .in('status', ['requested', 'assigned', 'in_transit'])
+          .in('status', ['requested', 'dispatching', 'assigned', 'accepted', 'in_progress', 'cancellation_requested'])
           .order('created_at', { ascending: false }),
       ]);
 

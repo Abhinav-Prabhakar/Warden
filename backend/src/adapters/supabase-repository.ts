@@ -68,18 +68,15 @@ export class SupabaseOperationsRepository implements OperationsRepository {
   }
 
   async createTransportTask(input: Omit<TransportTask, "id" | "createdAt">, key: string): Promise<TransportTask> {
-    const { data, error } = await this.db.from("transport_tasks")
-      .upsert(toTaskRow(input, key), { onConflict: "idempotency_key", ignoreDuplicates: true })
-      .select("*").maybeSingle();
+    const row = toTaskRow(input, key);
+    const { data, error } = await this.db.rpc("create_transport_task_with_projection", {
+      p_patient_id: row.patient_id, p_bed_id: row.bed_id, p_ward_id: row.ward_id,
+      p_origin_zone: row.origin_zone, p_destination: row.destination, p_urgency: row.urgency,
+      p_transport_mode: row.transport_mode, p_requested_by: row.requested_by,
+      p_status: row.status, p_idempotency_key: row.idempotency_key,
+    });
     if (error) throw error;
-    if (data) {
-      await this.ensureDashboardTask(data as Row);
-      return mapTask(data as Row);
-    }
-    const { data: existing, error: findError } = await this.db.from("transport_tasks").select("*").eq("idempotency_key", key).single();
-    if (findError) throw findError;
-    await this.ensureDashboardTask(existing as Row);
-    return mapTask(existing as Row);
+    return mapTask(data as Row);
   }
 
   async getTransportTask(id: string): Promise<TransportTask | null> {
@@ -91,21 +88,13 @@ export class SupabaseOperationsRepository implements OperationsRepository {
   async transitionTask(taskId: string, from: TransportTask["status"][], to: TransportTask["status"], actorId?: string): Promise<TransportTask> {
     const { data, error } = await this.db.rpc("transition_transport_task", { p_task_id: taskId, p_from: from, p_to: to, p_actor_id: actorId ?? null });
     if (error) throw error;
-    await this.syncDashboardStatus(data as Row, to);
     return mapTask(data as Row);
   }
 
   async assignTask(taskId: string, staffId: string): Promise<TransportTask> {
     const { data, error } = await this.db.rpc("assign_transport_task", { p_task_id: taskId, p_staff_id: staffId });
     if (error) throw error;
-    const row = data as Row;
-    if (row.dashboard_task_id) {
-      const { error: assignmentError } = await this.db.from("task_assignments").insert({ task_id: row.dashboard_task_id, staff_id: staffId });
-      if (assignmentError) throw assignmentError;
-      const { error: taskError } = await this.db.from("tasks").update({ status: "assigned" }).eq("id", row.dashboard_task_id);
-      if (taskError) throw taskError;
-    }
-    return mapTask(row);
+    return mapTask(data as Row);
   }
 
   async createDispatchAttempt(input: Omit<DispatchAttempt, "id">): Promise<DispatchAttempt> {
@@ -127,8 +116,8 @@ export class SupabaseOperationsRepository implements OperationsRepository {
   async appendEvent(event: OperationEvent): Promise<void> {
     const { error } = await this.db.from("operation_events").insert({
       task_id: event.taskId, call_session_id: event.callSessionId, operation_id: event.operationId,
-      revision: event.revision, type: event.type, actor_id: event.actorId, provider: event.provider,
-      metadata: event.metadata ?? {},
+      revision: event.revision, event_type: event.type, actor_staff_id: event.actorId, provider: event.provider,
+      payload: event.metadata ?? {},
     });
     if (error) throw error;
   }
@@ -184,47 +173,6 @@ export class SupabaseOperationsRepository implements OperationsRepository {
     };
   }
 
-  private async ensureDashboardTask(row: Row): Promise<void> {
-    if (row.dashboard_task_id) return;
-    const { data: ward, error: wardError } = await this.db.from("wards").select("hospital_id").eq("id", row.ward_id).single();
-    if (wardError) throw wardError;
-    const { data: task, error: taskError } = await this.db.from("tasks").insert({
-      hospital_id: ward.hospital_id,
-      patient_id: row.patient_id,
-      created_by: row.requested_by,
-      task_type: "transport",
-      title: `Transport to ${String(row.destination)}`,
-      description: `Telephone request from ${String(row.origin_zone)} by Warden`,
-      priority: row.urgency === "urgent" ? 2 : 3,
-      urgency: row.urgency,
-      status: "pending",
-      source: "voice",
-    }).select("id").single();
-    if (taskError) throw taskError;
-    const { error: linkError } = await this.db.from("transport_tasks").update({ dashboard_task_id: task.id }).eq("id", row.id).is("dashboard_task_id", null);
-    if (linkError) throw linkError;
-    row.dashboard_task_id = task.id;
-  }
-
-  private async syncDashboardStatus(row: Row, status: TransportTask["status"]): Promise<void> {
-    if (!row.dashboard_task_id) return;
-    const dashboardStatus = status === "accepted" ? "acknowledged"
-      : status === "dispatching" || status === "requested" ? "pending"
-      : status === "failed" ? "blocked"
-      : status === "cancellation_requested" ? "blocked"
-      : status;
-    const patch: Row = { status: dashboardStatus };
-    if (status === "completed") patch.completed_at = new Date().toISOString();
-    if (status === "cancelled") patch.cancelled_at = new Date().toISOString();
-    const { error } = await this.db.from("tasks").update(patch).eq("id", row.dashboard_task_id);
-    if (error) throw error;
-    if (status === "accepted" || status === "completed") {
-      const assignmentPatch: Row = status === "accepted" ? { accepted_at: new Date().toISOString() } : { completed_at: new Date().toISOString() };
-      const { error: assignmentError } = await this.db.from("task_assignments").update(assignmentPatch)
-        .eq("task_id", row.dashboard_task_id).eq("staff_id", row.assigned_staff_id);
-      if (assignmentError) throw assignmentError;
-    }
-  }
 }
 
 const normalizeBedStatus = (status: string): BedState["status"] =>
@@ -250,7 +198,7 @@ const toTaskRow = (task: Omit<TransportTask, "id" | "createdAt">, key: string): 
 const mapEvent = (row: Row): OperationEvent => ({
   id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined,
   callSessionId: row.call_session_id ? String(row.call_session_id) : undefined,
-  operationId: String(row.operation_id), revision: Number(row.revision), type: String(row.type),
-  actorId: row.actor_id ? String(row.actor_id) : undefined, provider: row.provider ? String(row.provider) : undefined,
-  metadata: (row.metadata ?? {}) as Record<string, unknown>, createdAt: new Date(String(row.created_at)),
+  operationId: String(row.operation_id), revision: Number(row.revision), type: String(row.event_type),
+  actorId: row.actor_staff_id ? String(row.actor_staff_id) : undefined, provider: row.provider ? String(row.provider) : undefined,
+  metadata: (row.payload ?? {}) as Record<string, unknown>, createdAt: new Date(String(row.created_at)),
 });

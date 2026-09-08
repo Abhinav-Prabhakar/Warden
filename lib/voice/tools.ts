@@ -43,6 +43,23 @@ export const WARDEN_VOICE_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'create_transport_request',
+      description: 'Create the canonical persistent hospital transport request for a bed. Use only when the user asks to arrange patient transport. Success means the request was recorded; assignment is reported separately.',
+      parameters: {
+        type: 'object',
+        properties: {
+          bed_number: { type: 'string', description: "Bed name or number, for example 'Bed 18'." },
+          destination: { type: 'string', description: 'Requested destination, for example Radiology.' },
+          urgency: { type: 'string', enum: ['routine', 'urgent'] },
+          transport_mode: { type: 'string', enum: ['wheelchair', 'stretcher'] },
+        },
+        required: ['bed_number', 'destination'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_staff_roster',
       description: 'Query available clinical staff (doctors, nurses, porters, pharmacists, ward coordinators) on duty, their availability status, phone extension, and specializations.',
       parameters: {
@@ -303,7 +320,11 @@ export const WARDEN_VOICE_TOOLS = [
   },
 ];
 
-export async function executeVoiceTool(name: string, args: Record<string, any>): Promise<any> {
+export async function executeVoiceTool(
+  name: string,
+  args: Record<string, any>,
+  context?: { operationId?: string; revision?: number; sessionId?: string },
+): Promise<any> {
   const admin = createAdminClient();
 
   try {
@@ -381,6 +402,75 @@ export async function executeVoiceTool(name: string, args: Record<string, any>):
           priority: t.priority,
           status: t.status,
         })),
+      };
+    }
+
+    if (name === 'create_transport_request') {
+      if (!context?.operationId || !Number.isInteger(context.revision)) {
+        throw new Error('Transport requests require an operation ID and revision');
+      }
+      const rawBed = String(args.bed_number || '').trim();
+      // These telephone-coordination tables are added by the latest migration;
+      // the checked-in generated Supabase types intentionally lag the migration.
+      const transportAdmin = admin as any;
+      const bedNumber = rawBed.replace(/^bed\s*/i, '');
+      const { data: bed, error: bedError } = await admin
+        .from('beds')
+        .select('id, bed_number, status, current_patient_id, room:rooms!beds_room_id_fkey(ward_id, room_number, ward:wards!rooms_ward_id_fkey(code))')
+        .in('bed_number', [bedNumber, rawBed])
+        .maybeSingle();
+      if (bedError) throw bedError;
+      if (!bed) throw new Error(`Bed ${rawBed} was not found`);
+      if (bed.status !== 'occupied' || !bed.current_patient_id) throw new Error(`Bed ${bed.bed_number} has no patient ready for transport`);
+
+      const { data: readiness, error: readinessError } = await transportAdmin
+        .from('bed_transport_readiness')
+        .select('ready')
+        .eq('bed_id', bed.id)
+        .maybeSingle();
+      if (readinessError) throw readinessError;
+      if (!readiness?.ready) throw new Error(`The patient in Bed ${bed.bed_number} is not marked ready for transport`);
+
+      const { data: requester, error: requesterError } = await admin
+        .from('staff')
+        .select('id')
+        .eq('is_on_duty', true)
+        .in('role', ['nurse', 'warden'])
+        .limit(1)
+        .maybeSingle();
+      if (requesterError) throw requesterError;
+      if (!requester) throw new Error('No verified on-duty requester is available');
+
+      const room = bed.room as any;
+      const { data: transport, error: transportError } = await transportAdmin.rpc('create_transport_task_with_projection', {
+        p_patient_id: bed.current_patient_id,
+        p_bed_id: bed.id,
+        p_ward_id: room.ward_id,
+        p_origin_zone: `${room.ward?.code || 'WARD'}-${room.room_number}`,
+        p_destination: String(args.destination),
+        p_urgency: args.urgency === 'urgent' ? 'urgent' : 'routine',
+        p_transport_mode: args.transport_mode === 'stretcher' ? 'stretcher' : 'wheelchair',
+        p_requested_by: requester.id,
+        p_status: 'requested',
+        p_idempotency_key: `${context.operationId}:${context.revision}`,
+      });
+      if (transportError) throw transportError;
+
+      await transportAdmin.from('operation_events').insert({
+        task_id: transport.id,
+        operation_id: context.operationId,
+        revision: context.revision,
+        event_type: 'voice.transport_requested',
+        provider: 'web_voice',
+        payload: { sessionId: context.sessionId, bedNumber: bed.bed_number, destination: args.destination },
+      });
+
+      return {
+        task_id: transport.id,
+        status: transport.status,
+        bed: `Bed ${bed.bed_number}`,
+        destination: transport.destination,
+        message: 'Transport request recorded and awaiting dispatch.',
       };
     }
 

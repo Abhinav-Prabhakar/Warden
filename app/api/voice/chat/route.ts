@@ -4,6 +4,8 @@ import { WARDEN_VOICE_TOOLS, executeVoiceTool } from '@/lib/voice/tools';
 
 export const runtime = 'nodejs';
 
+const latestRevisionBySession = new Map<string, number>();
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -13,11 +15,29 @@ export async function POST(request: Request) {
       provider = 'groq',
       model = 'qwen/qwen3.8-27b',
       stream = true,
+      sessionId,
+      operationId,
+      revision,
     } = body;
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
+
+    if (sessionId && Number.isInteger(revision)) {
+      const latest = latestRevisionBySession.get(sessionId) || 0;
+      if (revision < latest) {
+        return NextResponse.json({ error: 'Obsolete voice operation discarded', operationId, revision }, { status: 409 });
+      }
+      latestRevisionBySession.set(sessionId, revision);
+    }
+
+    const assertCurrent = () => {
+      if (request.signal.aborted) throw new DOMException('Voice operation aborted', 'AbortError');
+      if (sessionId && Number.isInteger(revision) && latestRevisionBySession.get(sessionId) !== revision) {
+        throw new Error('STALE_VOICE_OPERATION');
+      }
+    };
 
     const systemPrompt = await buildWardSystemPrompt();
     const messages = [
@@ -123,6 +143,7 @@ export async function POST(request: Request) {
     };
 
     const { res: initialRes, lastStatus, lastError } = await callUpstreamLLM(initialPayload);
+    assertCurrent();
 
     if (!initialRes || !initialRes.ok) {
       console.error('LLM initial error:', lastStatus, lastError);
@@ -138,12 +159,14 @@ export async function POST(request: Request) {
       messages.push(choice.message);
 
       for (const call of toolCalls) {
+        assertCurrent();
         let args = {};
         try {
           args = JSON.parse(call.function.arguments || '{}');
         } catch {}
 
-        const toolResult = await executeVoiceTool(call.function.name, args);
+        const toolResult = await executeVoiceTool(call.function.name, args, { operationId, revision, sessionId });
+        assertCurrent();
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
@@ -161,6 +184,7 @@ export async function POST(request: Request) {
       };
 
       const { res: finalRes, lastStatus: fStatus, lastError: fErr } = await callUpstreamLLM(finalPayload);
+      assertCurrent();
       if (!finalRes || !finalRes.ok) {
         return NextResponse.json({ error: `LLM final error: ${fErr}` }, { status: fStatus });
       }
@@ -254,6 +278,9 @@ export async function POST(request: Request) {
       },
     });
   } catch (err: any) {
+    if (err?.message === 'STALE_VOICE_OPERATION' || err?.name === 'AbortError') {
+      return NextResponse.json({ error: 'Obsolete voice operation discarded' }, { status: 409 });
+    }
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

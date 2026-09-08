@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { VoiceConfig, DEFAULT_VOICE_CONFIG } from "@/lib/voice/types";
 import { OrbState } from "thinking-orbs";
 import { getRotatedApiKey } from "@/lib/voice/key-rotation";
+import { TurnAudio } from "@/lib/voice/turn-audio";
 
 export function useVoiceAgent() {
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig>(() => {
@@ -50,6 +51,8 @@ export function useVoiceAgent() {
   const isSynthesizingRef = useRef<boolean>(false);
   const currentSpokenTextRef = useRef<string>("");
   const proactiveCooldownRef = useRef<Set<string>>(new Set());
+  const turnAudioRef = useRef(new TurnAudio());
+  const voiceSessionIdRef = useRef(globalThis.crypto.randomUUID());
 
   // Web Audio Chimes
   const playHospitalAlertChime = useCallback(() => {
@@ -351,6 +354,17 @@ export function useVoiceAgent() {
   const processUserSpeech = useCallback(
     async (userText: string) => {
       if (!userText || !userText.trim()) return;
+      const revision = turnAudioRef.current.next();
+      const operationId = globalThis.crypto.randomUUID();
+      const turnSignal = turnAudioRef.current.controller.signal;
+      turnAudioRef.current.attach(revision, () => {
+        if (currentAudioElementRef.current) {
+          currentAudioElementRef.current.pause();
+          currentAudioElementRef.current = null;
+        }
+        if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+        setIsPlayingAudio(false);
+      });
       const cleanInput = userText.trim();
       setTranscript(cleanInput);
       setStatusText("Thinking...");
@@ -380,11 +394,15 @@ export function useVoiceAgent() {
           },
           body: JSON.stringify({
             message: cleanInput,
+            sessionId: voiceSessionIdRef.current,
+            operationId,
+            revision,
             provider: voiceConfig.llm.provider,
             model: voiceConfig.llm.model,
             stream: voiceConfig.llm.stream,
             apiKey: activeLLMKey,
           }),
+          signal: turnSignal,
         });
 
         if (!response.ok) {
@@ -393,6 +411,7 @@ export function useVoiceAgent() {
 
         if (!voiceConfig.llm.stream) {
           const json = await response.json();
+          if (!turnAudioRef.current.current(revision)) return;
           fullResponseText = json.text || "";
           setLastResponse(fullResponseText);
           await synthesizeText(fullResponseText);
@@ -413,6 +432,10 @@ export function useVoiceAgent() {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          if (!turnAudioRef.current.current(revision)) {
+            await reader.cancel('obsolete voice turn');
+            return;
+          }
 
           sseBuffer += decoder.decode(value, { stream: true });
           const lines = sseBuffer.split("\n");
@@ -438,6 +461,7 @@ export function useVoiceAgent() {
                   const chunkToSpeak = sentenceBuffer.trim();
                   sentenceBuffer = "";
                   isFirstAudioChunk = false;
+                  if (!turnAudioRef.current.current(revision)) return;
                   await synthesizeText(chunkToSpeak);
                 }
               }
@@ -447,17 +471,21 @@ export function useVoiceAgent() {
 
         // Synthesize any remaining sentence buffer
         if (sentenceBuffer.trim()) {
+          if (!turnAudioRef.current.current(revision)) return;
           await synthesizeText(sentenceBuffer.trim());
         }
       } catch (err: any) {
+        if (err?.name === 'AbortError' || !turnAudioRef.current.current(revision)) return;
         console.error("Voice processing error:", err);
         const fallbackMsg = "Acknowledged. Live ward status updated.";
         setLastResponse(fallbackMsg);
         await synthesizeText(fallbackMsg);
       } finally {
-        setStatusText("Ready");
-        setOrbState("listening");
-        setOrbSpeed(1.0);
+        if (turnAudioRef.current.current(revision)) {
+          setStatusText("Ready");
+          setOrbState("listening");
+          setOrbSpeed(1.0);
+        }
       }
     },
     [voiceConfig, synthesizeText]
