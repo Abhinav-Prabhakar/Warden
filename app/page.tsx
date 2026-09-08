@@ -217,6 +217,19 @@ type BedDrilldown = {
   tasks?: { title?: string; status?: string }[];
   discharge_plan?: { planned_discharge_at?: string; status?: string; notes?: string } | null;
   cleaning_job?: { started_at?: string; status?: string } | null;
+  medications?: {
+    id: string;
+    dose?: string;
+    route?: string;
+    frequency?: string;
+    medication?: {
+      id: string;
+      name: string;
+      generic_name?: string;
+      strength?: string;
+      form?: string;
+    } | null;
+  }[];
 };
 
 function NoticeIcon({ type, className }: { type: string; className?: string }) {
@@ -384,6 +397,36 @@ export default function WardenMainScreen() {
   const [shelfError, setShelfError] = useState<string | null>(null);
   const [selectedMed, setSelectedMed] = useState<ShelfItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [orderDropLocation, setOrderDropLocation] = useState<string>("Bed 3 (Floor 7)");
+  const [orderStatus, setOrderStatus] = useState<{ kind: "idle" | "ordering" | "success" | "error"; message: string }>({
+    kind: "idle",
+    message: "",
+  });
+
+  // Handler to redirect from patient medication click to pharmacy screen
+  const handleOrderMedicationRedirect = (pm: {
+    id?: string;
+    dose?: string;
+    medication?: { id?: string; name: string; generic_name?: string } | null;
+  }) => {
+    const medName = pm.medication?.name || "";
+    if (selectedBed) {
+      setOrderDropLocation(`${selectedBed.name} (Floor ${currentFloor})`);
+    }
+    // Find matching item on shelf
+    const matched = shelfItems.find(
+      (item) =>
+        item.name.toLowerCase().includes(medName.toLowerCase()) ||
+        medName.toLowerCase().includes(item.name.toLowerCase())
+    );
+    if (matched) {
+      setSelectedMed(matched);
+    }
+    setSearchQuery(medName);
+    setOrderStatus({ kind: "idle", message: "" });
+    // Switch to Pharmacy screen (Screen 2)
+    setActiveScreen(1);
+  };
 
   // Live Food & Nutrition Inventory state (Screen 3)
   const [selectedFood, setSelectedFood] = useState<FoodInventoryItem | null>(FOOD_INVENTORY[0]);
@@ -974,28 +1017,6 @@ export default function WardenMainScreen() {
               );
             })}
 
-            {wardEvents.length > 0 && (
-              <aside className="absolute bottom-[26px] left-1/2 z-20 w-[340px] -translate-x-1/2 rounded-[16px] figma-glass-card px-[14px] py-[10px] shadow-[0_20px_45px_rgba(0,0,0,0.75)] pointer-events-none">
-                <div className="mb-[6px] flex items-center justify-between text-[8.5px] font-semibold uppercase tracking-[0.16em] text-[#8E93A4]">
-                  <span className="flex items-center gap-[5px]">
-                    <span className="h-[5px] w-[5px] rounded-full bg-[#1ECCE6] shadow-[0_0_6px_#1ECCE6]" />
-                    Live ward activity
-                  </span>
-                  <span className="font-mono text-[8px] text-[#1ECCE6]/90">stream live</span>
-                </div>
-                <div className="space-y-[6px]">
-                  {wardEvents.slice(0, 3).map((event) => (
-                    <div key={event.id} className="flex items-center gap-[8px] text-[9.5px] leading-snug">
-                      <span className="h-[5px] w-[5px] shrink-0 rounded-full" style={{ background: event.source === 'task' ? '#F0B429' : event.source === 'patient' ? '#E61E67' : '#1ECCE6', boxShadow: `0 0 5px ${event.source === 'task' ? '#F0B42980' : event.source === 'patient' ? '#E61E6780' : '#1ECCE680'}` }} />
-                      <span className="min-w-0 flex-1 truncate text-[#E2E6F0] font-normal">{event.message}</span>
-                      {event.bedNumber && <span className="shrink-0 font-semibold text-white/90 bg-white/[0.06] px-1.5 py-0.5 rounded text-[8.5px]">Bed {event.bedNumber}</span>}
-                      <span className="shrink-0 font-mono text-[8px] text-[#7A8095]">{elapsedLabel(event.occurredAt)}</span>
-                    </div>
-                  ))}
-                </div>
-              </aside>
-            )}
-
             {/* Bed 2 Dynamic Room Label in Top Room 3 */}
             {(() => {
               const bed2 = beds.find((b) => b.name === "Bed 2");
@@ -1257,6 +1278,30 @@ export default function WardenMainScreen() {
                         </span>
                       ))}
                     </div>
+
+                    {/* Patient Prescribed Medications — Simple text with dotted underlines redirecting to Pharmacy screen */}
+                    {drilldownData?.medications && drilldownData.medications.length > 0 && (
+                      <div className="flex items-center gap-[6px] min-w-0 flex-wrap text-[10.5px] pt-[2px]">
+                        <span className="text-[8.5px] uppercase font-bold tracking-[0.14em] text-[#7A8095]">Rx:</span>
+                        {drilldownData.medications.map((pm, idx) => {
+                          const medName = pm.medication?.name || "Medication";
+                          return (
+                            <button
+                              key={pm.id || idx}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOrderMedicationRedirect(pm);
+                              }}
+                              className="border-b border-dotted border-[#1ECCE6]/70 text-[#C6CBD9] hover:text-[#1ECCE6] hover:border-[#1ECCE6] text-[10px] font-medium transition-colors cursor-pointer bg-transparent p-0 leading-tight"
+                              title={`Click to order ${medName} to ${selectedBed?.name || 'Bed'}`}
+                            >
+                              {medName}{pm.dose ? ` (${pm.dose})` : ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </>
                 ) : isCleaning ? (
                   <div className="flex flex-col gap-[7px] py-[2px]">
@@ -1737,7 +1782,7 @@ export default function WardenMainScreen() {
                 width: "21.8%",
                 minWidth: "210px",
                 maxWidth: "248px",
-                height: "220px",
+                minHeight: "235px",
               }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -1764,9 +1809,77 @@ export default function WardenMainScreen() {
                     ))}
                   </div>
 
-                  <div className="relative pt-1">
-                    <div className="w-[78px] h-[24px] rounded-[6px] border border-white/10 bg-white/[0.03] flex items-center justify-center opacity-40">
-                      <div className="w-[32px] h-[2.5px] bg-white/30 rounded-full" />
+                  <div className="pt-2 border-t border-white/[0.08] flex flex-col gap-[7px]">
+                    <div className="flex items-center justify-between gap-1 text-[10px]">
+                      <span className="text-[#8E92A4] text-[9.5px] uppercase tracking-wider font-semibold">Drop at:</span>
+                      <select
+                        value={orderDropLocation}
+                        onChange={(e) => setOrderDropLocation(e.target.value)}
+                        className="bg-[#0B0E14]/90 text-[#1ECCE6] border border-white/10 rounded-[6px] px-2 py-1 text-[10px] outline-none cursor-pointer max-w-[130px] truncate"
+                      >
+                        <option value={`Bed 3 (Floor ${currentFloor})`}>{`Bed 3 (Floor ${currentFloor})`}</option>
+                        {beds.map((b) => (
+                          <option key={b.id} value={`${b.name} (Floor ${currentFloor})`}>
+                            {`${b.name} (Floor ${currentFloor})`}
+                          </option>
+                        ))}
+                        <option value={`Nurse Station (Floor ${currentFloor})`}>{`Nurse Station (Floor ${currentFloor})`}</option>
+                        <option value={`ICU Transfer Pod (Floor ${currentFloor})`}>{`ICU Transfer Pod (Floor ${currentFloor})`}</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        disabled={orderStatus.kind === "ordering"}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setOrderStatus({ kind: "ordering", message: "Dispatching order..." });
+                          try {
+                            const res = await fetch("/api/medications/order", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                medicationName: selectedMed.name,
+                                dropLocation: orderDropLocation,
+                                bedId: selectedBed?.id,
+                                patientId: selectedBed?.patientId,
+                              }),
+                            });
+                            const result = await res.json();
+                            if (!res.ok) throw new Error(result.error || "Order failed");
+                            setOrderStatus({
+                              kind: "success",
+                              message: `Ordered to ${orderDropLocation}`,
+                            });
+                            setTimeout(() => {
+                              setOrderStatus({ kind: "idle", message: "" });
+                            }, 4000);
+                          } catch (err: any) {
+                            setOrderStatus({
+                              kind: "error",
+                              message: err.message || "Failed to order",
+                            });
+                          }
+                        }}
+                        className={`w-full py-1.5 px-3 rounded-[8px] text-[10.5px] font-semibold tracking-wide uppercase transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 shadow-md ${
+                          orderStatus.kind === "success"
+                            ? "bg-[#24A951] text-white"
+                            : orderStatus.kind === "error"
+                            ? "bg-[#E61E67] text-white"
+                            : "bg-[#1ECCE6] hover:bg-[#1bb8cf] text-[#0B0E14]"
+                        }`}
+                      >
+                        {orderStatus.kind === "ordering" ? (
+                          <span>Ordering...</span>
+                        ) : orderStatus.kind === "success" ? (
+                          <span className="truncate">{orderStatus.message}</span>
+                        ) : orderStatus.kind === "error" ? (
+                          <span className="truncate">{orderStatus.message}</span>
+                        ) : (
+                          <span>Order to {orderDropLocation.split(" ")[0] || "Bed"}</span>
+                        )}
+                      </button>
                     </div>
                   </div>
                 </>
