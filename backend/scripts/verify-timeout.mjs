@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+const base = process.env.WARDEN_TEST_URL || 'http://localhost:3000';
+const call = async (path, body) => { const r = await fetch(`${base}/api/voice/${path}`, body ? { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(body) } : undefined); return { http:r.status, body:await r.json() }; };
+const created = await call('chat', {sessionId:crypto.randomUUID(),revision:1,message:'transport Bed 18 to Radiology'});
+assert.equal(created.http,200,JSON.stringify(created));
+assert.equal(created.body.task.status,'assigned');
+console.log('Waiting 21 seconds for the configured 20-second offer deadline.');
+const start=Date.now(); await new Promise(r=>setTimeout(r,21000));
+const state=await call('state'); const task=state.body.tasks.find(t=>t.id===created.body.task.id); const attempts=state.body.attempts.filter(a=>a.taskId===task.id);
+const result={elapsedMs:Date.now()-start,firstResponse:attempts[0].response,nextWorker:task.assignedStaffId,status:task.status};
+assert.equal(attempts[0].response,'timeout'); assert.notEqual(task.assignedStaffId,created.body.task.assignedStaffId);
+const failed=await call('action',{taskId:task.id,staffId:task.assignedStaffId,action:'reject'}); assert.equal(failed.body.task.status,'failed');
+const final=await call('state'); assert.ok(final.body.notifications.some(n=>n.taskId===task.id));
+console.log(JSON.stringify({...result,finalStatus:'failed',coordinatorAlertSaved:true}));
+await writeFile(new URL('../evidence/timeout.json',import.meta.url),JSON.stringify({...result,finalStatus:'failed',coordinatorAlertSaved:true},null,2)+'\n');
