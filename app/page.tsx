@@ -12,8 +12,22 @@ import { EnergyEfficiencyCard } from "@/app/components/EnergyEfficiencyCard";
 import { TelephoneCallAssistantCard } from "@/app/components/TelephoneCallAssistantCard";
 import { SmartwatchMapCard } from "@/app/components/SmartwatchMapCard";
 import { IncomingAdmissionsCard } from "@/app/components/IncomingAdmissionsCard";
-import { MedicationAsset } from "@/app/components/pharmacy/MedicationAsset";
-import { arrangeMedicationShelf, ITEMS_PER_SHELF_PAGE, type ShelfPlacement } from "@/lib/pharmacy/layout";
+
+interface ShelfItem {
+  id: string;
+  name: string;
+  genericName?: string | null;
+  strength?: string | null;
+  form?: string | null;
+  category: string;
+  indication: string[];
+  colorType: "cyan" | "orange" | "green" | "magenta";
+  leftPct: number;
+  topPct: number;
+  widthPct: number;
+  heightPct: number;
+  isBottleShape?: boolean;
+}
 
 interface BedOverlay {
   id: string;
@@ -369,12 +383,11 @@ export default function WardenMainScreen() {
   const [changedBedName, setChangedBedName] = useState<string | null>(null);
 
   // Live Pharmacy items state from Supabase
-  const [shelfItems, setShelfItems] = useState<ShelfPlacement[]>([]);
+  const [shelfItems, setShelfItems] = useState<ShelfItem[]>([]);
   const [shelfLoading, setShelfLoading] = useState<boolean>(true);
   const [shelfError, setShelfError] = useState<string | null>(null);
-  const [selectedMed, setSelectedMed] = useState<ShelfPlacement | null>(null);
+  const [selectedMed, setSelectedMed] = useState<ShelfItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [shelfPage, setShelfPage] = useState(0);
   const [pharmacyContext, setPharmacyContext] = useState<BedOverlay | null>(null);
   const [medicationRequest, setMedicationRequest] = useState<{ kind: "idle" | "working" | "error"; message: string }>({ kind: "idle", message: "" });
   const [orderDropLocation, setOrderDropLocation] = useState<string>("");
@@ -391,7 +404,6 @@ export default function WardenMainScreen() {
   }) => {
     const medName = pm.medication?.name || "";
     if (selectedBed) {
-      setOrderDropLocation(`${selectedBed.name} (Floor ${currentFloor})`);
       setPharmacyContext(selectedBed);
     }
     // Find matching item on shelf
@@ -402,12 +414,8 @@ export default function WardenMainScreen() {
     );
     if (matched) {
       setSelectedMed(matched);
-      if (typeof matched.page === "number") {
-        setShelfPage(matched.page);
-      }
     }
     setSearchQuery(medName);
-    setOrderStatus({ kind: "idle", message: "" });
     setMedicationRequest({ kind: "idle", message: "" });
     // Switch to Pharmacy screen (Screen 2)
     setActiveScreen(1);
@@ -560,12 +568,11 @@ export default function WardenMainScreen() {
         return res.json();
       })
       .then((data) => {
-        if (data && !data.error && Array.isArray(data.items)) {
-          const arranged = arrangeMedicationShelf(data.items);
-          setShelfItems(arranged);
-          if (arranged.length > 0) {
-            setSelectedMed((current) => arranged.find((item) => item.id === current?.id) || arranged[0]);
-          }
+        const items = Array.isArray(data) ? data : data?.items;
+        if (Array.isArray(items) && items.length > 0) {
+          setShelfItems(items);
+          const benadryl = items.find((i: ShelfItem) => i.name.toLowerCase().includes("benadryl"));
+          setSelectedMed((current) => (current ? items.find((i) => i.id === current.id) || current : benadryl || items[0]));
         } else {
           setShelfError(data?.error || "Failed to load pharmacy items");
         }
@@ -608,7 +615,6 @@ export default function WardenMainScreen() {
     );
     if (match) {
       setSelectedMed(match);
-      setShelfPage(match.page);
     }
   }, [searchQuery, shelfItems]);
 
@@ -1811,44 +1817,68 @@ export default function WardenMainScreen() {
               </div>
             )}
 
-            <div className="figma-glass-card absolute left-[8.5%] top-[16.5%] z-20 flex items-center gap-[8px] rounded-full border border-white/10 px-[11px] py-[6px] text-[10px] backdrop-blur-xl">
-              {pharmacyContext ? (
-                <>
-                  <span className="font-semibold text-white">{pharmacyContext.name}</span>
-                  <span className="text-[#555C6D]">·</span>
-                  <span className="text-[#B6BDCC]">{pharmacyContext.patientName}</span>
-                  <span className="ml-[4px] text-[#E98BAB]">Medication request</span>
-                </>
-              ) : (
-                <span className="text-[#8E92A4]">Browse mode · select a patient from the ward to request medicine</span>
-              )}
-            </div>
-
-            {/* Generated shelf: data → package classification → shelf → slot */}
+            {/* Highlighted Shelf Items */}
             {shelfItems
-              .filter((item) => item.page === shelfPage)
+              .filter((item) =>
+                searchQuery
+                  ? item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    Boolean(item.genericName?.toLowerCase().includes(searchQuery.toLowerCase()))
+                  : true
+              )
               .map((item) => {
                 const isSelected = selectedMed?.id === item.id;
-                const query = searchQuery.trim().toLowerCase();
-                const matched = !query || item.name.toLowerCase().includes(query) || item.category.toLowerCase().includes(query) || Boolean(item.genericName?.toLowerCase().includes(query));
+                const glowClass =
+                  item.colorType === "cyan"
+                    ? "shelf-glow-cyan"
+                    : item.colorType === "green"
+                    ? "shelf-glow-green"
+                    : item.colorType === "orange"
+                    ? "shelf-glow-orange"
+                    : "shelf-glow-magenta";
+
                 return (
-                  <MedicationAsset
+                  <div
                     key={item.id}
-                    item={item}
-                    selected={isSelected}
-                    matched={matched}
-                    onSelect={() => setSelectedMed(item)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMed(item);
+                    }}
+                    className={`absolute cursor-pointer transition-transform duration-200 z-10 ${glowClass} ${
+                      item.isBottleShape ? "rounded-[5px]" : "rounded-[3px]"
+                    } ${
+                      isSelected
+                        ? "scale-[1.02] ring-1 ring-white/30"
+                        : "hover:scale-[1.02]"
+                    }`}
+                    style={{
+                      left: `${item.leftPct}%`,
+                      top: `${item.topPct}%`,
+                      width: `${item.widthPct}%`,
+                      height: `${item.heightPct}%`,
+                      ...(item.isBottleShape && {
+                        borderRadius: "6px 6px 4px 4px",
+                      }),
+                    }}
+                    title={item.name}
                   />
                 );
               })}
 
-            {shelfItems.length > ITEMS_PER_SHELF_PAGE && (
-              <div className="figma-glass-card absolute bottom-[5.8%] left-[34%] z-20 flex items-center gap-[8px] rounded-full border border-white/10 px-[8px] py-[5px] backdrop-blur-xl">
-                <button type="button" disabled={shelfPage === 0} onClick={() => setShelfPage((page) => Math.max(0, page - 1))} className="h-[22px] w-[22px] rounded-full bg-white/5 text-xs text-white disabled:opacity-25">‹</button>
-                <span className="min-w-[54px] text-center text-[8px] font-semibold uppercase tracking-[0.12em] text-[#8E92A4]">Shelf {shelfPage + 1}/{Math.ceil(shelfItems.length / ITEMS_PER_SHELF_PAGE)}</span>
-                <button type="button" disabled={shelfPage >= Math.ceil(shelfItems.length / ITEMS_PER_SHELF_PAGE) - 1} onClick={() => setShelfPage((page) => page + 1)} className="h-[22px] w-[22px] rounded-full bg-white/5 text-xs text-white disabled:opacity-25">›</button>
-              </div>
-            )}
+            {/* Benadryl Floating Text Label */}
+            <div
+              className="absolute z-10 pointer-events-none text-center"
+              style={{
+                left: "37.30%",
+                top: "45.60%",
+                width: "2.73%",
+                transform: "translateX(-2px)",
+              }}
+            >
+              <span className="text-[#C87396] text-[12px] font-normal tracking-[0.02em] whitespace-nowrap">
+                Benadryl
+              </span>
+            </div>
 
             {/* Glassmorphism Search Pill */}
             <div
@@ -1881,7 +1911,7 @@ export default function WardenMainScreen() {
                 width: "21.8%",
                 minWidth: "210px",
                 maxWidth: "248px",
-                minHeight: "235px",
+                height: "220px",
               }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -1897,7 +1927,7 @@ export default function WardenMainScreen() {
                   </div>
 
                   <div className="my-[8px] flex flex-col gap-[6px]">
-                    {(selectedMed.indication || []).slice(0, 2).map((bullet, idx) => (
+                    {(selectedMed.indication || []).map((bullet, idx) => (
                       <div
                         key={idx}
                         className="flex items-start gap-[6px] text-[10px] leading-[1.35] text-[#C1C6D7]"
@@ -1908,70 +1938,9 @@ export default function WardenMainScreen() {
                     ))}
                   </div>
 
-                  <div className="pt-2 border-t border-white/[0.08] flex flex-col gap-[7px]">
-                    <div className="flex items-center justify-between gap-1 text-[10px]">
-                      <span className="text-[#8E92A4] text-[9.5px] uppercase tracking-wider font-semibold">Drop at:</span>
-                      <select
-                        value={orderDropLocation}
-                        disabled={Boolean(pharmacyContext)}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setOrderDropLocation(val);
-                          const matchedBed = beds.find((b) => val.startsWith(b.name));
-                          if (matchedBed) {
-                            setPharmacyContext(matchedBed);
-                          }
-                        }}
-                        className="bg-[#0B0E14]/90 text-[#1ECCE6] border border-white/10 rounded-[6px] px-2 py-1 text-[10px] outline-none cursor-pointer disabled:cursor-default disabled:opacity-90 max-w-[155px] truncate"
-                      >
-                        {!pharmacyContext && <option value="">Select destination</option>}
-                        {pharmacyContext && (
-                          <option value={`${pharmacyContext.name} (Floor ${currentFloor})`}>
-                            {`${pharmacyContext.name} · ${pharmacyContext.patientName}`}
-                          </option>
-                        )}
-                        {!pharmacyContext && beds.map((b) => (
-                          <option key={b.id} value={`${b.name} (Floor ${currentFloor})`}>
-                            {`${b.name} (Floor ${currentFloor})`}
-                          </option>
-                        ))}
-                        {!pharmacyContext && <option value={`Nurse Station (Floor ${currentFloor})`}>{`Nurse Station (Floor ${currentFloor})`}</option>}
-                        {!pharmacyContext && <option value={`ICU Transfer Pod (Floor ${currentFloor})`}>{`ICU Transfer Pod (Floor ${currentFloor})`}</option>}
-                      </select>
-                    </div>
-
-                    {orderStatus.kind === 'error' && (
-                      <div className="truncate rounded-md border border-[#E61E67]/30 bg-[#E61E67]/10 px-[7px] py-[4px] text-[8px] text-[#FF9DB2]" title={orderStatus.message}>
-                        {orderStatus.message}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        disabled={!pharmacyContext || orderStatus.kind === "ordering" || medicationRequest.kind === "working"}
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          await confirmMedicationRequest();
-                        }}
-                        className={`w-full py-1.5 px-3 rounded-[8px] text-[10.5px] font-semibold tracking-wide uppercase transition-all duration-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 flex items-center justify-center gap-1.5 shadow-md ${
-                          orderStatus.kind === "success"
-                            ? "bg-[#24A951] text-white"
-                            : orderStatus.kind === "error"
-                            ? "bg-[#E61E67] text-white"
-                            : "bg-[#1ECCE6] hover:bg-[#1bb8cf] text-[#0B0E14]"
-                        }`}
-                      >
-                        {orderStatus.kind === "ordering" ? (
-                          <span>Ordering...</span>
-                        ) : orderStatus.kind === "success" ? (
-                          <span className="truncate">{orderStatus.message}</span>
-                        ) : orderStatus.kind === "error" ? (
-                          <span className="truncate">{orderStatus.message}</span>
-                        ) : (
-                          <span>{pharmacyContext ? `Request for ${pharmacyContext.name}` : "Select patient from ward"}</span>
-                        )}
-                      </button>
+                  <div className="relative pt-1">
+                    <div className="w-[78px] h-[24px] rounded-[6px] border border-white/10 bg-white/[0.03] flex items-center justify-center opacity-40">
+                      <div className="w-[32px] h-[2.5px] bg-white/30 rounded-full" />
                     </div>
                   </div>
                 </>

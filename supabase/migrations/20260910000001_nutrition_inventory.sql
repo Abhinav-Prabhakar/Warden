@@ -41,4 +41,23 @@ ON CONFLICT (id) DO UPDATE SET
   dietary = EXCLUDED.dietary, location = EXCLUDED.location, stock = EXCLUDED.stock,
   active = TRUE, updated_at = NOW();
 
-ALTER PUBLICATION supabase_realtime ADD TABLE nutrition_inventory;
+DROP POLICY IF EXISTS "Allow dashboard read access" ON nutrition_inventory;
+CREATE POLICY "Allow dashboard read access"
+  ON nutrition_inventory
+  FOR SELECT
+  TO anon, authenticated
+  USING (active = TRUE);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'nutrition_inventory'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.nutrition_inventory;
+  END IF;
+END
+$$;
