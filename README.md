@@ -1,152 +1,329 @@
-# Warden — Voice-First Hospital Ward Operations Agent
+<div align="center">
 
-> **"Warden maintains a live model of what is happening in the ward, coordinates people/resources/tasks, and continuously re-evaluates its responses as the underlying situation changes."**
+# Warden
 
----
+### A live ward. A shared picture. One voice to coordinate it.
 
-## 1. What Warden Is & Product Purpose
+Voice-first hospital operations for nurses, ward coordinators, and support staff.
 
-Warden is an intelligent operational coordination layer designed specifically for **night-shift ward coordinators and charge nurses**. Working alone or with minimal staff at 2 AM in an acute hospital ward is a high-cognitive-load, rapidly mutating environment.
+[Live prototype](https://warden-eight-theta.vercel.app/) · [Quick start](#quick-start) · [Architecture](#architecture) · [Telephone backend](backend/README.md) · [Voice evidence](backend/RIME_EVIDENCE.md)
 
-### What Warden IS:
-- A live operational coordination layer
-- Voice-first, state-aware, and action-oriented
-- Interruptible and self-invalidating
-- Aware of operational dependencies, blockers, and queues
-- Designed for chaotic, high-stakes night shifts
+**Next.js 16 · React 19 · TypeScript · Supabase · LiveKit · Rime**
 
-### What Warden IS NOT:
-- A generic hospital management / EHR replacement
-- A static CRUD dashboard
-- A passive chatbot sitting beside a database
-- A clinical diagnostic or treatment decision system
+</div>
 
----
+![Warden ward environment](public/ward-room.png)
 
-## 2. In-Browser API Key Management (Zero `.env` for Voice & LLM APIs)
+*Ward scene asset used by the interactive prototype. Live overlays and controls are rendered by the application.*
 
-Warden is designed to be configured entirely in the browser without needing `.env` files for third-party AI APIs:
+## Why Warden?
 
-1. **5-Second Long-Press Settings Dialog:** Click and hold the ThinkingOrb for 5 seconds to open the `VoiceSettingsModal`.
-2. **Supported API Providers:**
-   - **TTS Providers:** Fish Audio (default `s2.1-pro-free` with SSE streaming), Rime AI (`mistv2`), OpenAI TTS, and Browser Speech.
-   - **LLM Providers:** Groq (`llama-3.3-70b-versatile`), OpenAI.
-   - **STT Providers:** Web Speech API, Groq Whisper Turbo, OpenAI Whisper.
-   - **LiveKit Credentials:** LiveKit WebSocket URL, API Key, and API Secret.
-3. **LocalStorage Persistence:** All entered credentials are saved to browser `localStorage` (`warden_api_keys` and `warden_voice_config`), overriding environment variables and dispatched via client headers and payloads directly to `/api/voice/chat` and `/api/voice/tts`.
+A phone call can request a porter. It cannot, by itself, give every nurse a shared record of who accepted, which bed is waiting, or what changed while they were speaking.
 
----
+Warden connects those steps. Its central idea is a **live operational twin of the ward**: beds, patients, tasks, staff, and dependencies should explain what is happening together. The ward is the primary workspace; pharmacy and supporting panels retain the surrounding operational context.
 
-## 3. Interactive UI & Floor Plan Navigation
+Built for the Rime voice AI hackathon, Warden uses synthetic hospital data. It coordinates work; it does not diagnose patients or recommend treatment. Nurses, coordinators, and porters are human users. Warden is the AI assistant.
 
-The main interface is built with Next.js 16 (Turbopack) and Tailwind CSS, adhering strictly to Figma glassmorphism design standards (`figma-glass-card`, Urbanist font):
+## Explore the prototype
 
-- **Full-Viewport Screen Swiping:** Drag or swipe horizontally on the background to navigate between operational screens:
-  - **Screen 1 (General Ward):** 3D floor plan with 11 interactive bed overlays, status glows, Bed 2 room label, and quick icon toolbar.
-  - **Screen 2 (Pharmacy Medicine Shelf):** 3D pharmacy shelving with downward light fixtures and 4 highlighted medication categories (Cetirizine, Benadryl, Ibuprofen, Amoxicillin) with clinical indications.
-  - **Screen 3 (Diagnostics & Telemetry):** Ward telemetry and diagnostic operational view.
-- **Centered Layout:** Both the floor plan and pharmacy shelf images and all their interactive UI elements (beds, overlays, labels, cards) are centered in the viewport for wide and ultra-wide displays.
+| Workspace | What you can do |
+| --- | --- |
+| **General ward** | Select beds, inspect patient context and operational tasks, change floors, and use inspection lighting. |
+| **Medication workspace** | Open pharmacy from a patient, search the inventory, select medication, and submit a patient-bound request. |
+| **Staff and tasks** | Inspect availability, workload, task ownership, and blockers. |
+| **Admissions** | Review incoming patients, arrival estimates, readiness blockers, and bed reservations. |
+| **Voice** | Speak through supported browser input and receive configured provider audio, including Rime. |
+| **Supporting panels** | Inspect inter-ward messages, deferred work, print requests, and estimated energy usage. |
+| **Food inventory** | Search database-backed nutrition inventory and inspect the matching item. |
 
----
+**Current boundaries:** the campus map is a reference view, energy history is modelled, and animations are not evidence of connected medical sensors or hardware. The patient-call panel is an explicitly gated simulation, separate from the standalone telephone transport backend.
 
-## 4. Bed Color Meanings & Clinical Semantics
+## Architecture
 
-The 11 beds on the ward floor plan reflect live clinical and operational state:
+The repository contains two applications. The Next.js dashboard serves its own API routes. The persistent Fastify backend and LiveKit agent handle telephone transport coordination. In live mode, Supabase connects their operational records.
 
-| Color | Meaning | Beds | Details |
-| :--- | :--- | :--- | :--- |
-| **Green** | **Patient is doing well** | **Beds 1, 5, 6, 8, 9, 11** | Normal vitals, resolving conditions, all care complete, zero pending tasks. |
-| **Orange** | **Task you have to do there** | **Beds 2, 4, 7, 10** | Active operational task requiring action:<br>• **Bed 2:** Terminal UV-C disinfection & restock<br>• **Bed 4:** Awaiting Attending sign-off on blocked discharge<br>• **Bed 7:** Wheelchair porter dispatch with portable O2 to CT Suite 1<br>• **Bed 10:** Discharge medication handover & family escort checkout |
-| **Red** | **Danger & Priority Test** | **Bed 3** | Critical vitals deterioration (HR 118, SpO2 90%, BP 158/98), unstable angina. Priority test: **STAT Doctor Review & 12-lead ECG**. |
+```mermaid
+flowchart TB
+    Nurse[Human nurse or coordinator]
+    Web[Next.js ward workspace]
+    API[Next.js API routes and services]
+    DB[(Supabase PostgreSQL)]
+    RT[Supabase Realtime]
+    SIP[Phone number and LiveKit SIP]
+    Agent[LiveKit voice agent]
+    Backend[Fastify transport backend]
+    Porter[Human porter on mobile]
+    Voice[Web STT / LLM / Rime TTS]
 
----
-
-## 5. Live Supabase Bed Drilldown Glass Card
-
-Clicking any of the 11 beds populates the bottom-right glassmorphic card directly from Supabase:
-- **Bed & Acuity Badges:** `DOING WELL` (Green), `TASK PENDING` (Orange), `DANGER / STAT` (Red).
-- **Patient Profile:** Full name, Medical Record Number (MRN), Blood Type, Age/Sex, and Active Condition.
-- **Cardiac Waveform & Vitals Strip:** Real-time animated cardiac telemetry bars plus 4-column vitals: Heart Rate (with pulse animation), SpO2, Blood Pressure, and Temperature.
-- **Operational Notices:** Contextual banners highlighting pending tasks, discharge blockers, cleaning ETA, or clinical alerts.
-- **Action Toolbar:** One-click Porter Request dispatch and Print Clinical Paperwork triggers.
-- **ThinkingOrb Voice Agent:** Anchored to the bottom-right corner, reacting visually to voice states (`idle`, `listening`, `thinking`, `speaking`).
-
----
-
-## 6. Architecture & Services
-
-### Frontend & API Layer (`app/`)
-- Built on Next.js 16 App Router with Turbopack.
-- REST endpoints under `/api/beds`, `/api/tasks`, `/api/ward`, `/api/voice/chat`, `/api/voice/tts`, `/api/voice/livekit`, `/api/print-queue`, `/api/simulation`, `/api/staff`, `/api/efficiency`, `/api/warden/radio`, `/api/warden/calls`, `/api/warden/memory`, `/api/warden/admissions`.
-
-### Operational Dock Cards & Panels
-1. **Radio Inter-Ward Broadcasts & Cloud Printer Queue Drawer (Dish Icon):**
-   - Transmits audio/text dispatches to other ward coordinators across floors.
-   - Do Not Disturb (DND) toggle to temporarily block incoming live radio audio during emergency procedures; queued messages remain safely indexed for the voice agent to retrieve later.
-   - **Dedicated Cloud Printer Queue Panel (§19, §48):** Built directly into the card as a dedicated tab. Displays online laser printer hardware status (toner, paper trays), active queued/processing/printing/failed jobs, queue position `#1 Active`, job cancellation (`DELETE /api/print-queue/[id]`), retry (`POST /api/print-queue/[id]`), and STAT requisition dispatch with automatic duplicate prevention.
-2. **Staff Directory (Fingerprint Icon):**
-   - Live roster of all nurses, physicians, and support staff on duty.
-   - Specialization, active workload badges, and contact actions with swipe-left dismissal.
-3. **Energy Efficiency Suite (Leaf Icon):**
-   - Live kWh consumption analytics for the active floor and hospital-wide benchmark.
-   - Automatic HVAC and lighting zone controls linked directly to live bed occupancy state.
-4. **Autonomous Inpatient Phone Call Assistant (Telephone Icon):**
-   - Voice agent autonomously calls patient room phones (`/api/warden/calls`) to assess comfort, pain, and needs.
-   - Live call session view with two-way conversation transcript.
-   - Real-time clinical note extraction (e.g. breakthrough pain, hydration, ambulation assist).
-   - Automatic closed-loop creation and dispatch of follow-up ward tasks into Supabase.
-5. **Night-Shift Memory & Deferred Tasks Scratchpad (§29, §34):**
-   - Dedicated glassmorphic memory card answering *"What am I forgetting?"* and *"What did I promise to do?"*.
-   - Stores spoken intentions and follow-up promises with countdown timers (`In 15m`, `Overdue 4m`) and one-click completion.
-6. **Incoming Admissions Staging Queue (§20):**
-   - Glassmorphic inbound transfer card tracking patients en-route to the ward with real-time ETA, admitting diagnosis, acuity, and special requirements (Isolation, Infusion pump).
-   - Live blocker awareness (bed cleaning ETA, pending doctor orders) and 1-click bed reservation and expedited cleaning actions.
-
-### Self-Invalidating Speech Mid-Stream (§4, §68 Rule 1 & 2)
-- Warden monitors operational state mutability while speaking. If underlying ward state changes mid-sentence (e.g. Nurse Priya is assigned to a STAT emergency while Warden is speaking about her availability), Warden immediately aborts playback with a correction tone and utters: *"Wait — state update: Nurse Priya was just assigned to Bed 3 STAT review; Rahul is available instead."*
-- Includes a 1-click "⚡ Test Invalidation" header trigger for instant verification.
-
-### Proactive Spontaneous Audio Callouts (§57)
-- Warden continuously monitors ward anomalies in the background. When a critical vitals deterioration occurs (e.g. Bed 3 cardiac alert SpO2 90% / HR 118) or an unacknowledged STAT task is detected, Warden plays a hospital emergency chime and speaks a concise operational callout without waiting for user prompt.
-
-### Backend Service Layer (`lib/services/`)
-- **`WardService`:** Central operational aggregator, temporal "What changed?" queries, and bed drilldown resolver.
-- **`BedService`:** Deterministic bed lifecycle transitions (`occupied`, `cleaning`, `available`, `blocked`).
-- **`TaskService`:** Closed-loop operational task tracking with urgency and dependency tracing.
-- **`PrintService`:** Cloud printer queue manager with automated duplicate detection.
-- **`IntelligenceService`:** Runtime self-invalidation evaluation, bottleneck prediction, contradiction detection, and shift handoff generation.
-
-### Standalone Telephone Backend (`backend/`)
-- Express & TypeScript service for LiveKit SIP telephone dispatch.
-- Multi-provider TTS adapter supporting Fish Audio SSE streaming, Rime AI, and fallback waterfall.
-- Decoupled from Next.js root tsconfig to ensure clean Vercel production builds.
-- Comprehensive Vitest suite with 33/33 passing tests across 6 test suites.
-
----
-
-## 7. Database (`Supabase / PostgreSQL`)
-
-- **Host:** `https://boxxmmxulpagjswsnvxw.supabase.co`
-- **Core Domains:** Physical facility (`beds`, `rooms`), clinical state (`patients`, `vitals`, `patient_conditions`), operational movement (`tasks`, `cleaning_jobs`, `discharge_plans`), and event memory (`patient_events`, `system_events`).
-- **Database Seeding:** Run `node --env-file=.env.local scripts/seed-beds.mjs` to re-seed all 11 beds and their clinical states.
-
----
-
-## 8. Verification & Local Development
-
-```bash
-# 1. Install dependencies
-npm install
-
-# 2. Run Next.js development server
-npm run dev
-
-# 3. Run production build
-npm run build
-
-# 4. Run backend tests
-cd backend && npm test
+    Nurse -->|Browser| Web
+    Web --> API
+    API <--> DB
+    DB --> RT -->|Refresh affected views| Web
+    Web <--> Voice
+    Nurse -->|Telephone| SIP
+    SIP <--> Agent
+    Agent -->|Validated tools| Backend
+    Backend <--> DB
+    Backend -->|Sequential dispatch| SIP
+    SIP <--> Porter
 ```
 
-### Production Deployment
-- **Live Vercel Production URL:** [https://warden-eight-theta.vercel.app](https://warden-eight-theta.vercel.app)
+Provider interfaces live in [`backend/src/ports`](backend/src/ports). Repository, telephony, and speech adapters sit outside transport business rules. The LiveKit agent composes its speech session separately, so replacing a provider can require both an adapter and session configuration changes.
+
+### Telephone transport flow
+
+This is the implemented backend flow; real carrier delivery and timing still require a deployed verification run.
+
+```mermaid
+sequenceDiagram
+    actor Nurse
+    participant Warden as LiveKit agent
+    participant API as Transport service
+    participant DB as Supabase
+    actor Porter
+    participant Ward as Ward UI
+
+    Nurse->>Warden: Call hospital number
+    Warden->>API: Verify phone and spoken PIN
+    Nurse->>Warden: Transport Bed 18 to radiology
+    Warden->>Nurse: Confirm request details
+    Nurse->>Warden: Confirm
+    Warden->>API: Create transport with idempotency key
+    API->>DB: Validate readiness and persist task
+    API->>Porter: Outbound SIP call
+    alt Porter accepts by voice or DTMF 1
+        Porter->>API: Accept through agent
+        API->>DB: Record acceptance and assignment
+        DB-->>Ward: Realtime change
+    else Rejection or timeout
+        API->>API: Try next eligible porter
+        Note over API: Escalate when candidates are exhausted
+    end
+```
+
+A created request, a dispatched call, an accepted assignment, and completed transport are different states. An acknowledgement must come from the worker; starting a call is not acceptance.
+
+### Contextual medication flow
+
+```mermaid
+flowchart LR
+    Bed[Select bed and patient] --> Open[Open Medication]
+    Open --> Shelf[Pharmacy with patient context]
+    Shelf --> Search[Search and select medicine]
+    Search --> Confirm[Confirm request]
+    Confirm --> RPC[Database medication request function]
+    RPC -->|Success| Return[Return to selected ward bed]
+    RPC -->|Failure| Error[Visible error - remain in workspace]
+    Return --> Requested[Requested]
+    Requested --> Preparing[Preparing]
+    Preparing --> Ready[Ready]
+    Ready --> Delivered[Delivered]
+```
+
+The database request is attached to the patient, bed, medication, and task. Later stages require workflow transitions; they do not complete automatically because an animation finished.
+
+### Interruption handling
+
+The telephone/backend coordination logic tracks operation revisions so late work cannot become a new action after an interruption.
+
+```mermaid
+flowchart TD
+    A[Bed 18 request - revision 1] --> B[Lookup or speech in progress]
+    B --> C[Interrupt: Bed 21 instead]
+    C --> D[Stop speech and invalidate old revision]
+    D --> E[Bed 21 request - revision 2]
+    B -. Late revision 1 result .-> F[Discard obsolete result]
+    E --> G[Validate current request]
+    G --> H[Confirm and act]
+    C --> I{Task already dispatched?}
+    I -->|Yes| J[Request cancellation and await worker acknowledgement]
+```
+
+Automated tests cover stale-result rejection and audio fencing. **The 500 ms audible interruption target is not yet a measured live-call result.** See the [evidence ledger](backend/RIME_EVIDENCE.md).
+
+## Quick start
+
+Use a current Node.js LTS release compatible with Next.js 16 and the LiveKit Node packages, npm, and a Supabase project. Node.js 22 is a practical starting point. Live phone calls additionally need LiveKit and a compatible SIP provider.
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/Abhinav-Prabhakar/Warden.git
+cd Warden
+npm ci
+cp .env.example .env.local
+```
+
+### 2. Configure the web app
+
+Fill in `.env.local` with your own values:
+
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
+
+# Web voice providers
+GROQ_API_KEY=YOUR_GROQ_KEY
+RIME_API_KEY=YOUR_RIME_KEY
+```
+
+Keep service credentials on the server. The prototype also exposes browser voice settings and persists entered keys in local storage; use server configuration for a shared demo and do not enter service-role or infrastructure secrets into a shared browser.
+
+### 3. Apply the database schema
+
+For a linked Supabase project:
+
+```bash
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push
+```
+
+Review pending migrations before applying them to an existing database. The root [`supabase/migrations`](supabase/migrations) directory contains the base schema, telephone additions, unified transport operations, medication requests, and nutrition inventory.
+
+For a fresh demo database, run [`supabase/seed.sql`](supabase/seed.sql) in the Supabase SQL Editor **after the migrations**. Review [`backend/supabase/seed.sql`](backend/supabase/seed.sql) if you also need the telephone demo identities. Seed files contain synthetic fixtures and should not be applied to real hospital records.
+
+### 4. Start the dashboard
+
+```bash
+npm run dev
+```
+
+Open **[localhost:3000](http://localhost:3000)**. Database errors are displayed when credentials or tables are missing; the dashboard does not become an in-memory ward automatically.
+
+### 5. Try a patient workflow
+
+1. Select an occupied bed and inspect its patient context.
+2. Open Medication to enter pharmacy for that patient.
+3. Search for an available medicine and confirm the request.
+4. Verify the same bed shows the request after returning to the ward.
+5. Click the voice orb to start voice input; hold it for **2.5 seconds** to open provider settings.
+
+Browser speech recognition depends on browser support and microphone permissions. Use a supported browser such as Chrome for the demo. Rime is the default web speech output; provider errors are surfaced rather than silently replaced with browser speech. Previously saved voice settings can override the new defaults.
+
+## Run the telephone backend
+
+In a separate terminal:
+
+```bash
+cd backend
+npm ci
+cp .env.example .env
+# Set API_AUTH_TOKEN to a random secret of at least 12 characters.
+# For local browser access, set CORS_ORIGIN=http://localhost:3000.
+npm run dev
+```
+
+The example explicitly sets `WARDEN_MODE=simulation`. This starts a fixture-backed API on **port 3100**, uses memory that resets on restart, and makes no real calls. It does not replace the dashboard's Supabase database.
+
+```bash
+curl http://localhost:3100/health
+```
+
+The health response identifies the active mode and storage. Simulation commands use `/api/local/chat`, `/api/local/interrupt`, and `/api/local/action`; protected routes require a bearer token.
+
+### Enable real telephone coordination
+
+Set these values in `backend/.env` or the service's server secrets:
+
+| Variable | Purpose |
+| --- | --- |
+| `WARDEN_MODE=live` | Enable persistent repository and LiveKit telephony. |
+| `API_AUTH_TOKEN` | Authenticate agent-to-backend requests. |
+| `BACKEND_BASE_URL` | Reachable URL of the persistent backend. |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Connect the shared database. |
+| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | Connect LiveKit. |
+| `LIVEKIT_SIP_OUTBOUND_TRUNK_ID` | Select the outbound SIP trunk. |
+| `STT_PROVIDER=livekit-inference` | Use the configured LiveKit inference STT model. |
+| `LLM_PROVIDER=livekit-inference` | Use the configured inference language model. |
+| `TTS_PROVIDER=rime` | Explicitly select Rime for judging. |
+| `TTS_MODEL=rime/mistv2`, `TTS_VOICE=abbie` | Configure the telephone voice. |
+
+The telephone agent uses LiveKit Inference for its speech session; the web TTS endpoint uses a direct Rime API key. Configure access for both paths when demonstrating both.
+
+Create an inbound SIP trunk and agent dispatch rule, then start the worker separately:
+
+```bash
+npm run agent
+```
+
+Deploy the Next.js application to Vercel, the Fastify API to a persistent Node host, and the voice worker to a compatible LiveKit Agents environment. A Vercel dashboard deployment alone does not start the telephone service or provision a phone number.
+
+The separate web patient-call demo requires `WARDEN_ENABLE_CALL_SIMULATION=true` in the Next.js environment. Enabling it permits simulated calls; supplying LiveKit credentials does not turn that panel into a live dialler.
+
+## API guide
+
+| Application | Endpoint family | Responsibility |
+| --- | --- | --- |
+| Next.js | `/api/beds`, `/api/tasks`, `/api/ward/*` | Ward state, tasks, changes, and operational summaries. |
+| Next.js | `/api/pharmacy`, `/api/medication-requests` | Inventory and patient-bound medication workflows. |
+| Next.js | `/api/nutrition` | Nutrition inventory from Supabase. |
+| Next.js | `/api/voice/chat`, `/api/voice/stt`, `/api/voice/tts` | Web voice provider requests. |
+| Next.js | `/api/warden/*`, `/api/print-queue` | Supporting coordination panels and print records. |
+| Fastify | `/api/tasks`, `/api/tasks/:id/*` | Telephone transport creation and lifecycle. |
+| Fastify | `/api/dispatch/respond` | Worker acknowledgement from the agent. |
+| Fastify | `/api/calls/livekit/webhook` | Signature-verified LiveKit events. |
+
+The two applications have separate `/api/tasks` routes; use the correct host and port. See the [backend API guide](backend/README.md#api) for headers and idempotency requirements. The legacy web `/api/medications/order` endpoint returns `410`; use patient-bound medication requests.
+
+## Verification and limits
+
+```bash
+# Dashboard
+npx tsc --noEmit
+npm run build
+npm run lint
+
+# Telephone backend
+cd backend
+npm test
+npm run typecheck
+npm run build
+```
+
+At the last recorded verification, the frontend production build and backend type-check/build passed. The backend suite passed **33 tests across 6 files**. Frontend lint still reports existing repository issues; there is no clean-lint claim.
+
+| Area | Evidence / remaining work |
+| --- | --- |
+| Transport rules | Automated coverage for identity checks, readiness, duplicates, dispatch outcomes, cancellation, and HTTP authentication. |
+| Interruption logic | Automated revision/audio fencing coverage; carrier audio timing remains unmeasured. |
+| Database-backed UI | Requires applied migrations and valid Supabase credentials; production workflow verification must follow configuration. |
+| Rime audio | Integration exists; successful audible output requires valid provider access. |
+| Real inbound/outbound calls | Requires deployed backend, agent, SIP trunks, number, and live acceptance tests. |
+| Public-demo security | Next.js route authorization is not uniformly enforced. This prototype is not ready for real patient data or unrestricted operational use. |
+| Hardware and telemetry | Campus map, modelled energy, and queue/telemetry visuals do not prove physical device integration. |
+
+## Repository map
+
+```text
+Warden/
+├── app/                    Next.js ward UI, panels, and API routes
+├── lib/
+│   ├── services/           Ward, bed, task, print, and intelligence services
+│   ├── realtime/          Supabase change subscriptions
+│   └── voice/             Browser voice session and settings
+├── backend/
+│   ├── src/agent-entry.ts LiveKit voice worker
+│   ├── src/api.ts         Fastify API
+│   ├── src/workflow/      Transport orchestration
+│   ├── src/conversation/  Conversation and revision control
+│   ├── src/ports/         Provider interfaces
+│   ├── src/adapters/      Provider implementations
+│   ├── tests/             Backend verification
+│   └── RIME_EVIDENCE.md   Measured results and pending live evidence
+├── supabase/              Schema migrations and demo fixtures
+├── scripts/               Additional seeding utilities
+├── public/                Ward, pharmacy, food, and icon assets
+└── types/                 Database types
+```
+
+## Contributing
+
+Open an issue with the workflow you expected, what happened, and steps to reproduce. For changes, keep patient context intact, preserve the existing visual language, and verify the consequence across affected views. A success message must follow a successful state transition; simulations and estimates must remain visible as such.
+
+Use synthetic data, keep secrets out of commits, and include relevant test results with your pull request. For voice changes, distinguish automated logic tests from measured audible behavior.
+
+## License
+
+No open-source license is currently included in this repository. Public source availability does not grant a general license to reuse the code or visual assets. A license should be selected by the project owners before an open-source release.
