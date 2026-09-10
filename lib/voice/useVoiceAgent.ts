@@ -17,6 +17,9 @@ export function useVoiceAgent() {
         return {
           ...DEFAULT_VOICE_CONFIG,
           ...parsed,
+          stt: { ...DEFAULT_VOICE_CONFIG.stt, ...parsed.stt },
+          llm: { ...DEFAULT_VOICE_CONFIG.llm, ...parsed.llm },
+          tts: { ...DEFAULT_VOICE_CONFIG.tts, ...parsed.tts },
           apiKeys: {
             ...DEFAULT_VOICE_CONFIG.apiKeys,
             ...(parsed.apiKeys || {}),
@@ -36,6 +39,9 @@ export function useVoiceAgent() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
+
+  const listeningRequestedRef = useRef(false);
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Audio & speech references
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -119,7 +125,7 @@ export function useVoiceAgent() {
 
   // Play audio buffer from TTS
   const playAudioBlob = useCallback(async (blob: Blob): Promise<void> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       try {
         if (currentAudioElementRef.current) {
           currentAudioElementRef.current.pause();
@@ -146,8 +152,15 @@ export function useVoiceAgent() {
           resolve();
         };
 
+        audio.onpause = () => {
+          URL.revokeObjectURL(audioUrl);
+          setIsPlayingAudio(false);
+          resolve();
+        };
         audio.onerror = (e) => {
           console.warn("Audio playback error:", e);
+          URL.revokeObjectURL(audioUrl);
+          reject(new Error("Audio playback failed. Check your audio output and retry."));
           setIsPlayingAudio(false);
           setOrbState("listening");
           setOrbSpeed(1.0);
@@ -156,6 +169,8 @@ export function useVoiceAgent() {
 
         audio.play().catch((err) => {
           console.warn("Autoplay was prevented or error occurred:", err);
+          URL.revokeObjectURL(audioUrl);
+          reject(new Error("Audio blocked by browser. Click the voice button and retry."));
           setIsPlayingAudio(false);
           setOrbState("listening");
           resolve();
@@ -172,6 +187,7 @@ export function useVoiceAgent() {
     async (text: string): Promise<void> => {
       if (!text || !text.trim()) return;
       isSynthesizingRef.current = true;
+      const speechSignal = turnAudioRef.current.controller.signal;
 
       try {
         if (voiceConfig.tts.provider === "browser_speech") {
@@ -209,6 +225,7 @@ export function useVoiceAgent() {
         );
 
         const res = await fetch("/api/voice/tts", {
+          signal: speechSignal,
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -228,13 +245,16 @@ export function useVoiceAgent() {
         });
 
         if (!res.ok) {
-          throw new Error(`TTS failed with status ${res.status}`);
+          const failure = await res.json().catch(() => ({}));
+          throw new Error(failure.error || `TTS failed with status ${res.status}`);
         }
 
         const blob = await res.blob();
+        if (speechSignal.aborted) return;
         currentSpokenTextRef.current = text;
         await playAudioBlob(blob);
       } catch (err: any) {
+        if (speechSignal.aborted) return;
         console.warn("TTS synthesis error:", err?.message);
         setIsPlayingAudio(false);
         setOrbState("breathing");
@@ -405,7 +425,8 @@ export function useVoiceAgent() {
         });
 
         if (!response.ok) {
-          throw new Error(`Chat failed with status ${response.status}`);
+          const failure = await response.json().catch(() => ({}));
+          throw new Error(failure.error || `Chat failed with status ${response.status}`);
         }
 
         if (!voiceConfig.llm.stream) {
@@ -476,12 +497,12 @@ export function useVoiceAgent() {
       } catch (err: any) {
         if (err?.name === 'AbortError' || !turnAudioRef.current.current(revision)) return;
         console.error("Voice processing error:", err);
-        const fallbackMsg = "Acknowledged. Live ward status updated.";
-        setLastResponse(fallbackMsg);
-        await synthesizeText(fallbackMsg);
+        const message = err instanceof Error ? err.message : "Voice request failed";
+        setLastResponse(`Request failed: ${message}. No success has been confirmed.`);
+        setStatusText(`Voice error: ${message}`);
       } finally {
         if (turnAudioRef.current.current(revision)) {
-          setStatusText("Ready");
+          setStatusText(current => /error|unavailable/i.test(current) ? current : listeningRequestedRef.current ? "Listening" : "Ready");
           setOrbState("listening");
           setOrbSpeed(1.0);
         }
@@ -498,7 +519,7 @@ export function useVoiceAgent() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      console.warn("Web Speech Recognition not supported in this browser.");
+      setStatusText("Microphone recognition unsupported here — open Chrome or use the text input.");
       return;
     }
 
@@ -527,6 +548,12 @@ export function useVoiceAgent() {
 
       const spoken = (final || interim).trim();
       if (spoken) {
+        if (isSynthesizingRef.current) {
+          turnAudioRef.current.next();
+          currentAudioElementRef.current?.pause();
+          window.speechSynthesis?.cancel();
+          setIsPlayingAudio(false);
+        }
         accumulatedSpeechRef.current = spoken;
         setTranscript(spoken);
 
@@ -625,26 +652,36 @@ export function useVoiceAgent() {
     };
 
     recognition.onerror = (event: any) => {
-      if (event.error !== "no-speech") {
-        console.warn("Speech recognition error:", event.error);
-      }
+      if (event.error === "no-speech" || event.error === "aborted") return;
+      listeningRequestedRef.current = false;
+      setIsRecording(false);
+      const reason = event.error === "not-allowed" || event.error === "service-not-allowed"
+        ? "Microphone blocked — allow microphone access in browser site settings, then retry."
+        : `Microphone error: ${event.error}. Retry or use the text input.`;
+      setStatusText(reason);
     };
 
     recognition.onend = () => {
-      // Keep listening continuous unless disabled
-      try {
-        if (!isSynthesizingRef.current) {
-          recognition.start();
-        }
-      } catch (e) {}
+      setIsRecording(false);
+      if (!listeningRequestedRef.current) return;
+      restartTimerRef.current = setTimeout(() => {
+        if (!listeningRequestedRef.current) return;
+        try { recognition.start(); } catch { /* Already starting. */ }
+      }, 300);
     };
 
     recognitionRef.current = recognition;
-
+    if (listeningRequestedRef.current) {
+      try { recognition.start(); } catch { /* Already starting. */ }
+    }
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.onresult = null;
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      recognition.abort();
+      if (recognitionRef.current === recognition) recognitionRef.current = null;
     };
   }, [voiceConfig.stt.language, voiceConfig.stt.silenceTimeoutMs, processUserSpeech]);
 
@@ -667,20 +704,31 @@ export function useVoiceAgent() {
   };
 
   const toggleVoiceSession = () => {
-    if (isRecording) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
+    if (listeningRequestedRef.current) {
+      listeningRequestedRef.current = false;
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      accumulatedSpeechRef.current = "";
+      turnAudioRef.current.next();
+      recognitionRef.current?.abort();
+      currentAudioElementRef.current?.pause();
+      window.speechSynthesis?.cancel();
+      setIsPlayingAudio(false);
       setIsRecording(false);
       setStatusText("Paused");
-    } else {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.start();
-        } catch (e) {}
-      }
-      setIsRecording(true);
-      setStatusText("Listening");
+      return;
+    }
+    if (!recognitionRef.current) {
+      setStatusText("Speech recognition unavailable — open Chrome, or type your request below.");
+      return;
+    }
+    listeningRequestedRef.current = true;
+    setStatusText("Starting microphone — allow access if prompted");
+    try {
+      recognitionRef.current.start();
+    } catch (error) {
+      listeningRequestedRef.current = false;
+      setStatusText(`Microphone could not start: ${error instanceof Error ? error.message : "retry"}`);
     }
   };
 

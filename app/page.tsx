@@ -473,6 +473,8 @@ export default function WardenMainScreen() {
     triggerProactiveCallout,
   } = useVoiceAgent();
 
+  const [voiceDraft, setVoiceDraft] = useState("");
+
   // Swipe gesture detection state
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -927,6 +929,22 @@ export default function WardenMainScreen() {
       onTouchEnd={handleTouchEnd}
       className={`warden-theme relative w-screen h-screen overflow-hidden select-none cursor-grab active:cursor-grabbing ${isLightMode ? 'theme-light' : 'theme-dark'}`}
     >
+      <details className="absolute bottom-4 left-4 z-50 w-[min(360px,calc(100vw-32px))] rounded-xl border border-white/15 bg-[#141923]/95 p-3 text-xs text-slate-100 shadow-xl cursor-auto"
+        onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
+        <summary className="cursor-pointer">Voice · {voiceStatusText}</summary>
+        <div className="mt-3 flex gap-2">
+          <button type="button" className="rounded bg-cyan-900 px-3 py-2" onClick={toggleVoiceSession}>{isRecording ? "Pause voice" : "Start listening"}</button>
+          <button type="button" className="rounded border border-white/20 px-3 py-2" onClick={() => setIsSettingsOpen(true)}>Voice settings</button>
+        </div>
+        <p className="mt-2 text-slate-300">Output: {voiceConfig.tts.provider} · {voiceConfig.tts.speaker}</p>
+        <p className="mt-2" aria-live="polite">Heard: {transcript || "Waiting for your request"}</p>
+        <p className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap" aria-live="polite">{lastResponse}</p>
+        <form className="mt-3 flex gap-2" onSubmit={e => { e.preventDefault(); if (voiceDraft.trim()) { void processUserSpeech(voiceDraft.trim()); setVoiceDraft(""); } }}>
+          <input aria-label="Type a ward voice request" placeholder="Or type a ward question…" value={voiceDraft} onChange={e => setVoiceDraft(e.target.value)} className="min-w-0 flex-1 rounded border border-white/20 bg-black/30 px-2 py-2" />
+          <button className="rounded bg-cyan-900 px-3 py-2" type="submit">Send</button>
+        </form>
+      </details>
+
       {/* =====================================================================
           TOP HEADER (Top Left Dots, Title, Subtitle) - Anchored to Viewport
          ===================================================================== */}
