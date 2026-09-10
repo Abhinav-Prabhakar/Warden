@@ -326,4 +326,4 @@ Use synthetic data, keep secrets out of commits, and include relevant test resul
 
 ## License
 
-No open-source license is currently included in this repository. Public source availability does not grant a general license to reuse the code or visual assets. A license should be selected by the project owners before an open-source release.
+MIT
