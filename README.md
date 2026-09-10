@@ -14,6 +14,8 @@ Voice-first hospital operations for nurses, ward coordinators, and support staff
 
 ![Warden ward environment](public/ward-room.png)
 
+https://github.com/user-attachments/assets/1a193ce6-6e66-4c79-8759-0eebb3918ed3
+
 *Ward scene asset used by the interactive prototype. Live overlays and controls are rendered by the application.*
 
 ## Why Warden?
