@@ -382,7 +382,7 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7, isLightMo
           id: "map-background",
           type: "background",
           paint: {
-            "background-color": isLightMode ? "#17202A" : "#0B0E14",
+            "background-color": isLightMode ? "#26323D" : "#101722",
           },
         },
         // Campus ground polygons
@@ -392,7 +392,7 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7, isLightMo
           source: "campus_parcels",
           filter: ["==", "type", "ground"],
           paint: {
-            "fill-color": isLightMode ? "#273541" : "#11151F",
+            "fill-color": isLightMode ? "#3A4A56" : "#1C2A38",
           },
         },
         // Healing garden & courtyard greens
@@ -422,7 +422,7 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7, isLightMo
           type: "line",
           source: "campus_roads",
           paint: {
-            "line-color": isLightMode ? "#60717E" : "#242D3C",
+            "line-color": isLightMode ? "#93A7B5" : "#526579",
             "line-width": 4,
           },
         },
@@ -443,12 +443,7 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7, isLightMo
           type: "fill-extrusion",
           source: "hospital_buildings",
           paint: {
-            "fill-extrusion-color": [
-              "case",
-              ["has", "color"],
-              ["get", "color"],
-              "#1E293B",
-            ],
+            "fill-extrusion-color": isLightMode ? "#7693A8" : "#405E74",
             "fill-extrusion-height": ["get", "height"],
             "fill-extrusion-base": ["get", "base_height"],
             "fill-extrusion-opacity": 0.95,
@@ -590,7 +585,7 @@ export function SmartwatchMapCard({ isOpen, onClose, currentFloor = 7, isLightMo
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/75 backdrop-blur-md border border-white/15 shadow-lg">
               <span className="w-1.5 h-1.5 rounded-full bg-[#1ECCE6] animate-ping" />
               <span className="text-[9px] font-mono font-semibold text-white tracking-wide">
-                FL {currentFloor} · 3D HUD
+                FL {currentFloor} · CAMPUS REFERENCE
               </span>
               <span className="text-[#8E92A4] text-[9px]">|</span>
               <span className="text-[9px] font-mono text-[#1ECCE6] font-bold">

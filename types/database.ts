@@ -1450,6 +1450,60 @@ export type Database = {
         }
         Relationships: []
       }
+      nutrition_inventory: {
+        Row: {
+          active: boolean
+          calories: string
+          carbs: string
+          category: string
+          dietary: string[]
+          height_pct: number
+          id: string
+          left_pct: number
+          location: string
+          name: string
+          protein: string
+          stock: string
+          top_pct: number
+          updated_at: string
+          width_pct: number
+        }
+        Insert: {
+          active?: boolean
+          calories: string
+          carbs: string
+          category: string
+          dietary?: string[]
+          height_pct: number
+          id: string
+          left_pct: number
+          location: string
+          name: string
+          protein: string
+          stock: string
+          top_pct: number
+          updated_at?: string
+          width_pct: number
+        }
+        Update: {
+          active?: boolean
+          calories?: string
+          carbs?: string
+          category?: string
+          dietary?: string[]
+          height_pct?: number
+          id?: string
+          left_pct?: number
+          location?: string
+          name?: string
+          protein?: string
+          stock?: string
+          top_pct?: number
+          updated_at?: string
+          width_pct?: number
+        }
+        Relationships: []
+      }
       navigation_edges: {
         Row: {
           accessible: boolean | null

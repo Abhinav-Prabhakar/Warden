@@ -40,7 +40,7 @@ export class SupabaseOperationsRepository implements OperationsRepository {
     if (readinessError) throw readinessError;
     return {
       id: String(row.id),
-      label: `Bed ${String(row.bed_number)}`,
+      label: /^bed\s+/i.test(String(row.bed_number)) ? String(row.bed_number) : `Bed ${String(row.bed_number)}`,
       wardId: String(ward.id),
       zone: `${String(ward.code)}-${String(room.room_number)}`,
       status: normalizeBedStatus(String(row.status)),

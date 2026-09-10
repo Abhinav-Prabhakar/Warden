@@ -340,25 +340,12 @@ export interface FoodInventoryItem {
   stock: string;
 }
 
-const FOOD_INVENTORY: FoodInventoryItem[] = [
-  { id: "roma-tomatoes", name: "Roma Tomatoes", category: "Fresh Produce", leftPct: 27.34, topPct: 53.19, widthPct: 10.02, heightPct: 7.98, calories: "22 kcal", protein: "1.1g", carbs: "4.8g", dietary: ["Low Potassium", "Renal Approved", "Diabetic Safe"], location: "Shelf 4 · Crisper", stock: "18 units" },
-  { id: "cavendish-bananas", name: "Cavendish Bananas", category: "Fresh Fruit", leftPct: 40.1, topPct: 62.17, widthPct: 9.11, heightPct: 7.98, calories: "89 kcal", protein: "1.1g", carbs: "22.8g", dietary: ["High Potassium", "Energy Boost", "Soft Texture"], location: "Shelf 5 · Fruit Bin", stock: "24 units" },
-  { id: "pasteurized-whole-milk", name: "Pasteurized Whole Milk", category: "Dairy & Eggs", leftPct: 78.07, topPct: 15.29, widthPct: 12.15, heightPct: 12.63, calories: "149 kcal", protein: "8.0g", carbs: "12.0g", dietary: ["Calcium Rich", "Vitamin D Fortified"], location: "Right Door · Top Tier", stock: "6 bottles" },
-  { id: "fresh-garden-carrots", name: "Fresh Garden Carrots", category: "Fresh Produce", leftPct: 56.2, topPct: 54.52, widthPct: 9.42, heightPct: 6.98, calories: "41 kcal", protein: "0.9g", carbs: "9.6g", dietary: ["Vitamin A Rich", "Diabetic Safe"], location: "Shelf 4 · Center", stock: "14 units" },
-  { id: "sunkist-navel-oranges", name: "Sunkist Navel Oranges", category: "Fresh Fruit", leftPct: 51.03, topPct: 63.16, widthPct: 10.02, heightPct: 7.31, calories: "62 kcal", protein: "1.2g", carbs: "15.4g", dietary: ["High Vitamin C", "Hydrating"], location: "Shelf 5 · Citrus Bin", stock: "12 units" },
-  { id: "honeycrisp-red-apples", name: "Honeycrisp Red Apples", category: "Fresh Fruit", leftPct: 27.95, topPct: 63.16, widthPct: 10.33, heightPct: 7.31, calories: "95 kcal", protein: "0.5g", carbs: "25.0g", dietary: ["Fiber Rich", "Low Glycemic"], location: "Shelf 5 · Apple Bin", stock: "16 units" },
-  { id: "savoy-cabbage-greens", name: "Savoy Cabbage & Greens", category: "Fresh Produce", leftPct: 51.64, topPct: 75.8, widthPct: 18.83, heightPct: 9.64, calories: "25 kcal", protein: "1.3g", carbs: "5.8g", dietary: ["Vitamin K Rich", "Anti-Inflammatory"], location: "Crisper Drawer Right", stock: "8 heads" },
-  { id: "organic-russet-potatoes", name: "Organic Russet Potatoes", category: "Grains & Roots", leftPct: 28.55, topPct: 75.8, widthPct: 18.23, heightPct: 9.64, calories: "110 kcal", protein: "3.0g", carbs: "26.0g", dietary: ["High Starch", "Potassium Source"], location: "Crisper Drawer Left", stock: "22 units" },
-  { id: "cold-pressed-juices", name: "Cold-Pressed Juices", category: "Beverages", leftPct: 8.51, topPct: 66.49, widthPct: 12.76, heightPct: 14.63, calories: "110 kcal", protein: "1.0g", carbs: "26.0g", dietary: ["100% Juice", "No Added Sugar"], location: "Left Door · Lower Tier", stock: "10 bottles" },
-  { id: "artisanal-cheese-blocks", name: "Artisanal Cheese Blocks", category: "Dairy & Eggs", leftPct: 54.68, topPct: 33.24, widthPct: 13.67, heightPct: 5.32, calories: "115 kcal", protein: "7.0g", carbs: "0.4g", dietary: ["High Protein", "Gluten Free"], location: "Shelf 2 · Deli Tier", stock: "4 blocks" },
-  { id: "farm-fresh-grade-a-eggs", name: "Farm Fresh Grade A Eggs", category: "Dairy & Eggs", leftPct: 52.55, topPct: 22.27, widthPct: 17.31, heightPct: 6.65, calories: "72 kcal", protein: "6.3g", carbs: "0.4g", dietary: ["Complete Protein", "Choline Rich"], location: "Shelf 1 · Top Right", stock: "18 eggs" },
-  { id: "condiments-sauces", name: "Condiments & Sauces", category: "Condiments", leftPct: 8.81, topPct: 34.91, widthPct: 12.15, heightPct: 9.97, calories: "15 kcal", protein: "0.2g", carbs: "3.5g", dietary: ["Low Calorie", "Preserved"], location: "Left Door · Middle Tier", stock: "8 jars" },
-  { id: "sweet-bell-peppers", name: "Sweet Bell Peppers", category: "Fresh Produce", leftPct: 65.31, topPct: 54.52, widthPct: 5.16, heightPct: 6.65, calories: "31 kcal", protein: "1.0g", carbs: "6.0g", dietary: ["Vitamin C", "Low Sodium"], location: "Shelf 4 · Right", stock: "6 units" },
-  { id: "whole-wheat-loaf", name: "Whole Wheat Loaf", category: "Bakery", leftPct: 27.95, topPct: 39.89, widthPct: 9.72, heightPct: 10.64, calories: "80 kcal", protein: "4.0g", carbs: "15.0g", dietary: ["Whole Grain", "Dietary Fiber"], location: "Shelf 3 · Left", stock: "2 loaves" },
-  { id: "greek-yogurt-cups", name: "Greek Yogurt Cups", category: "Dairy & Eggs", leftPct: 77.76, topPct: 36.57, widthPct: 12.45, heightPct: 6.32, calories: "100 kcal", protein: "10.0g", carbs: "6.0g", dietary: ["Probiotic", "Calcium Rich"], location: "Right Door · Tier 2", stock: "8 cups" },
-];
-
 const AVAILABLE_FLOORS = [4, 5, 6, 7, 8];
+
+function formatBedLabel(value: unknown, fallback: number): string {
+  const raw = String(value ?? fallback).trim();
+  return /^bed\s+/i.test(raw) ? raw.replace(/^bed\s+/i, "Bed ") : `Bed ${raw}`;
+}
 
 export default function WardenMainScreen() {
   const [isLightMode, setIsLightMode] = useState(false);
@@ -390,7 +377,7 @@ export default function WardenMainScreen() {
   const [shelfPage, setShelfPage] = useState(0);
   const [pharmacyContext, setPharmacyContext] = useState<BedOverlay | null>(null);
   const [medicationRequest, setMedicationRequest] = useState<{ kind: "idle" | "working" | "error"; message: string }>({ kind: "idle", message: "" });
-  const [orderDropLocation, setOrderDropLocation] = useState<string>("Bed 3 (Floor 7)");
+  const [orderDropLocation, setOrderDropLocation] = useState<string>("");
   const [orderStatus, setOrderStatus] = useState<{ kind: "idle" | "ordering" | "success" | "error"; message: string }>({
     kind: "idle",
     message: "",
@@ -427,7 +414,9 @@ export default function WardenMainScreen() {
   };
 
   // Live Food & Nutrition Inventory state (Screen 3)
-  const [selectedFood, setSelectedFood] = useState<FoodInventoryItem | null>(FOOD_INVENTORY[0]);
+  const [foodInventory, setFoodInventory] = useState<FoodInventoryItem[]>([]);
+  const [foodInventoryError, setFoodInventoryError] = useState<string | null>(null);
+  const [selectedFood, setSelectedFood] = useState<FoodInventoryItem | null>(null);
   const [foodSearchQuery, setFoodSearchQuery] = useState("");
 
   // Live Supabase bed drilldown state — keyed by bed name so stale
@@ -447,6 +436,13 @@ export default function WardenMainScreen() {
       window.localStorage.setItem('warden-theme', next ? 'light' : 'dark');
       return next;
     });
+  };
+
+  const changeFloor = (nextFloor: number) => {
+    setSelectedBed(null);
+    setDrilldown(null);
+    setSettledBed(null);
+    setCurrentFloor(nextFloor);
   };
 
   // Modular Voice Agent Hook
@@ -477,9 +473,10 @@ export default function WardenMainScreen() {
 
   // 1. Fetch live beds from Supabase whenever floor changes
   useEffect(() => {
+    const controller = new AbortController();
     setBedsLoading(true);
     setBedsError(null);
-    fetch(`/api/beds?floor=${currentFloor}`)
+    fetch(`/api/beds?floor=${currentFloor}`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         return res.json();
@@ -498,7 +495,7 @@ export default function WardenMainScreen() {
             return {
               id: b.id,
               patientId: pat?.id,
-              name: `Bed ${b.bed_number || idx + 1}`,
+              name: formatBedLabel(b.bed_number, idx + 1),
               color: b.color,
               leftPct: geom.leftPct,
               topPct: geom.topPct,
@@ -524,10 +521,14 @@ export default function WardenMainScreen() {
         }
       })
       .catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("Failed to load beds:", err);
         setBedsError("Live database connection unavailable for beds");
       })
-      .finally(() => setBedsLoading(false));
+      .finally(() => {
+        if (!controller.signal.aborted) setBedsLoading(false);
+      });
+    return () => controller.abort();
   }, [currentFloor, wardRealtime.revision]);
 
   useEffect(() => {
@@ -542,7 +543,7 @@ export default function WardenMainScreen() {
         setWardEvents(nextEvents);
         const latestBed = nextEvents[0]?.bedNumber;
         if (latestBed) {
-          setChangedBedName(`Bed ${latestBed}`);
+          setChangedBedName(formatBedLabel(latestBed, 0));
           window.setTimeout(() => setChangedBedName(null), 1800);
         }
       })
@@ -574,7 +575,28 @@ export default function WardenMainScreen() {
         setShelfError("Live database connection unavailable for pharmacy");
       })
       .finally(() => setShelfLoading(false));
-  }, []);
+  }, [wardRealtime.revision]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/nutrition', { signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Nutrition inventory unavailable');
+        return result;
+      })
+      .then((result) => {
+        const items = Array.isArray(result.items) ? result.items : [];
+        setFoodInventory(items);
+        setSelectedFood((current) => items.find((item: FoodInventoryItem) => item.id === current?.id) || items[0] || null);
+        setFoodInventoryError(null);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setFoodInventoryError(error instanceof Error ? error.message : 'Nutrition inventory unavailable');
+      });
+    return () => controller.abort();
+  }, [wardRealtime.revision]);
 
   useEffect(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -745,7 +767,7 @@ export default function WardenMainScreen() {
     .filter(([, process]) => Boolean(process));
 
   // Food items that are active and revealed in full vibrant color on Screen 3
-  const activeColoredFoods = FOOD_INVENTORY.filter((item) => {
+  const activeColoredFoods = foodInventory.filter((item) => {
     if (foodSearchQuery.trim()) {
       return (
         item.name.toLowerCase().includes(foodSearchQuery.toLowerCase()) ||
@@ -841,6 +863,8 @@ export default function WardenMainScreen() {
       return;
     }
     setPharmacyContext(selectedBed);
+    setOrderDropLocation(`${selectedBed.name} (Floor ${currentFloor})`);
+    setOrderStatus({ kind: "idle", message: "" });
     setMedicationRequest({ kind: "idle", message: "" });
     setActiveScreen(1);
   };
@@ -848,6 +872,7 @@ export default function WardenMainScreen() {
   const confirmMedicationRequest = async () => {
     if (!pharmacyContext?.patientId || !selectedMed) return;
     setMedicationRequest({ kind: "working", message: "Recording medication request…" });
+    setOrderStatus({ kind: "ordering", message: "Recording medication request…" });
     try {
       const response = await fetch('/api/medication-requests', {
         method: 'POST',
@@ -876,9 +901,12 @@ export default function WardenMainScreen() {
         : bed);
       setBedAction({ kind: "success", message: `${selectedMed.name} requested · ${result.request.id.slice(0, 8)}` });
       setMedicationRequest({ kind: "idle", message: "" });
+      setOrderStatus({ kind: "success", message: `Requested for ${pharmacyContext.name}` });
       setActiveScreen(0);
     } catch (error) {
-      setMedicationRequest({ kind: "error", message: error instanceof Error ? error.message : 'Medication request failed' });
+      const message = error instanceof Error ? error.message : 'Medication request failed';
+      setMedicationRequest({ kind: "error", message });
+      setOrderStatus({ kind: "error", message });
     }
   };
 
@@ -919,8 +947,11 @@ export default function WardenMainScreen() {
         </div>
 
         {/* Center Title */}
-        <div className="text-[#8E92A4] text-[12px] font-medium tracking-[0.06em]">
-          {activeScreen === 0 ? "General Ward" : activeScreen === 1 ? "Pharmacy" : "Food Inventory"}
+        <div className="flex items-center gap-2 text-[#8E92A4] text-[12px] font-medium tracking-[0.06em]">
+          <span>{activeScreen === 0 ? "General Ward" : activeScreen === 1 ? "Pharmacy" : "Food Inventory"}</span>
+          <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[7px] uppercase tracking-[0.14em] text-[#6F7688]">
+            Synthetic demo data
+          </span>
         </div>
 
         {/* Right Label with Quick Controls & Floor Chevrons */}
@@ -966,7 +997,7 @@ export default function WardenMainScreen() {
                 onClick={() => {
                   const currIdx = AVAILABLE_FLOORS.indexOf(currentFloor);
                   const prevIdx = (currIdx - 1 + AVAILABLE_FLOORS.length) % AVAILABLE_FLOORS.length;
-                  setCurrentFloor(AVAILABLE_FLOORS[prevIdx]);
+                  changeFloor(AVAILABLE_FLOORS[prevIdx]);
                 }}
                 className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-[#8E92A4] hover:text-white transition-all cursor-pointer"
                 title="Previous Floor"
@@ -995,7 +1026,7 @@ export default function WardenMainScreen() {
                 onClick={() => {
                   const currIdx = AVAILABLE_FLOORS.indexOf(currentFloor);
                   const nextIdx = (currIdx + 1) % AVAILABLE_FLOORS.length;
-                  setCurrentFloor(AVAILABLE_FLOORS[nextIdx]);
+                  changeFloor(AVAILABLE_FLOORS[nextIdx]);
                 }}
                 className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-[#8E92A4] hover:text-white transition-all cursor-pointer"
                 title="Next Floor"
@@ -1022,7 +1053,7 @@ export default function WardenMainScreen() {
         {/* =====================================================================
             SCREEN 1: GENERAL WARD (Takes entire viewport w-screen h-screen)
            ===================================================================== */}
-        <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
+        <div aria-hidden={activeScreen !== 0} inert={activeScreen !== 0} className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
           <div className="relative h-full aspect-[2750/1536] max-w-none shrink-0">
             {/* Base 3D Ward Render */}
             <div className="theme-scene absolute inset-0 w-full h-full">
@@ -1720,7 +1751,7 @@ export default function WardenMainScreen() {
         {/* =====================================================================
             SCREEN 2: PHARMACY SHELF (Takes entire viewport w-screen h-screen)
            ===================================================================== */}
-        <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
+        <div aria-hidden={activeScreen !== 1} inert={activeScreen !== 1} className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
           <div className="relative h-full aspect-[2760/1840] max-w-none shrink-0">
             {/* Base 3D Shelf Render */}
             <div className="theme-scene absolute inset-0 w-full h-full">
@@ -1882,6 +1913,7 @@ export default function WardenMainScreen() {
                       <span className="text-[#8E92A4] text-[9.5px] uppercase tracking-wider font-semibold">Drop at:</span>
                       <select
                         value={orderDropLocation}
+                        disabled={Boolean(pharmacyContext)}
                         onChange={(e) => {
                           const val = e.target.value;
                           setOrderDropLocation(val);
@@ -1890,16 +1922,21 @@ export default function WardenMainScreen() {
                             setPharmacyContext(matchedBed);
                           }
                         }}
-                        className="bg-[#0B0E14]/90 text-[#1ECCE6] border border-white/10 rounded-[6px] px-2 py-1 text-[10px] outline-none cursor-pointer max-w-[130px] truncate"
+                        className="bg-[#0B0E14]/90 text-[#1ECCE6] border border-white/10 rounded-[6px] px-2 py-1 text-[10px] outline-none cursor-pointer disabled:cursor-default disabled:opacity-90 max-w-[155px] truncate"
                       >
-                        <option value={`Bed 3 (Floor ${currentFloor})`}>{`Bed 3 (Floor ${currentFloor})`}</option>
-                        {beds.map((b) => (
+                        {!pharmacyContext && <option value="">Select destination</option>}
+                        {pharmacyContext && (
+                          <option value={`${pharmacyContext.name} (Floor ${currentFloor})`}>
+                            {`${pharmacyContext.name} · ${pharmacyContext.patientName}`}
+                          </option>
+                        )}
+                        {!pharmacyContext && beds.map((b) => (
                           <option key={b.id} value={`${b.name} (Floor ${currentFloor})`}>
                             {`${b.name} (Floor ${currentFloor})`}
                           </option>
                         ))}
-                        <option value={`Nurse Station (Floor ${currentFloor})`}>{`Nurse Station (Floor ${currentFloor})`}</option>
-                        <option value={`ICU Transfer Pod (Floor ${currentFloor})`}>{`ICU Transfer Pod (Floor ${currentFloor})`}</option>
+                        {!pharmacyContext && <option value={`Nurse Station (Floor ${currentFloor})`}>{`Nurse Station (Floor ${currentFloor})`}</option>}
+                        {!pharmacyContext && <option value={`ICU Transfer Pod (Floor ${currentFloor})`}>{`ICU Transfer Pod (Floor ${currentFloor})`}</option>}
                       </select>
                     </div>
 
@@ -1912,43 +1949,12 @@ export default function WardenMainScreen() {
                     <div className="flex items-center justify-between gap-2">
                       <button
                         type="button"
-                        disabled={orderStatus.kind === "ordering"}
+                        disabled={!pharmacyContext || orderStatus.kind === "ordering" || medicationRequest.kind === "working"}
                         onClick={async (e) => {
                           e.stopPropagation();
-                          setOrderStatus({ kind: "ordering", message: "Dispatching order..." });
-                          try {
-                            const targetBed = pharmacyContext || selectedBed;
-                            const res = await fetch("/api/medications/order", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                medicationName: selectedMed.name,
-                                dropLocation: orderDropLocation,
-                                bedId: targetBed?.id,
-                                patientId: targetBed?.patientId,
-                              }),
-                            });
-                            const result = await res.json();
-                            if (!res.ok) throw new Error(result.error || "Order failed");
-                            setOrderStatus({
-                              kind: "success",
-                              message: `Ordered to ${orderDropLocation}`,
-                            });
-                            setBedAction({
-                              kind: "success",
-                              message: `${selectedMed.name} ordered to ${orderDropLocation}`,
-                            });
-                            setTimeout(() => {
-                              setOrderStatus({ kind: "idle", message: "" });
-                            }, 4000);
-                          } catch (err: any) {
-                            setOrderStatus({
-                              kind: "error",
-                              message: err.message || "Failed to order",
-                            });
-                          }
+                          await confirmMedicationRequest();
                         }}
-                        className={`w-full py-1.5 px-3 rounded-[8px] text-[10.5px] font-semibold tracking-wide uppercase transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 shadow-md ${
+                        className={`w-full py-1.5 px-3 rounded-[8px] text-[10.5px] font-semibold tracking-wide uppercase transition-all duration-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 flex items-center justify-center gap-1.5 shadow-md ${
                           orderStatus.kind === "success"
                             ? "bg-[#24A951] text-white"
                             : orderStatus.kind === "error"
@@ -1963,7 +1969,7 @@ export default function WardenMainScreen() {
                         ) : orderStatus.kind === "error" ? (
                           <span className="truncate">{orderStatus.message}</span>
                         ) : (
-                          <span>Order to {orderDropLocation.split(" ")[0] || "Bed"}</span>
+                          <span>{pharmacyContext ? `Request for ${pharmacyContext.name}` : "Select patient from ward"}</span>
                         )}
                       </button>
                     </div>
@@ -1999,7 +2005,7 @@ export default function WardenMainScreen() {
         {/* =====================================================================
             SCREEN 3: FOOD & NUTRITION INVENTORY
            ===================================================================== */}
-        <div className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
+        <div aria-hidden={activeScreen !== 2} inert={activeScreen !== 2} className="relative w-screen h-screen shrink-0 overflow-hidden flex items-center justify-center">
           <div className="relative h-full aspect-[1646/1504] max-w-none shrink-0 fridge-drop-shadow">
             {/* Base B&W / Grey Fridge Render */}
             <div className="theme-scene absolute inset-0 w-full h-full">
@@ -2014,6 +2020,11 @@ export default function WardenMainScreen() {
             </div>
 
             {/* SVG ClipPath defining the colored regions for selected/matching items */}
+            {foodInventoryError && (
+              <div className="absolute left-1/2 top-[12%] z-30 -translate-x-1/2 rounded-full border border-[#E61E67]/35 bg-[#2A1018]/90 px-4 py-1.5 text-[10px] text-[#FF9DB2]">
+                Nutrition data unavailable · {foodInventoryError}
+              </div>
+            )}
             <svg className="absolute w-0 h-0 pointer-events-none" aria-hidden="true">
               <defs>
                 <clipPath id="food-color-clip" clipPathUnits="objectBoundingBox">
@@ -2048,7 +2059,7 @@ export default function WardenMainScreen() {
             </div>
 
             {/* Interactive Clickable Hitbox Overlays for Food Items */}
-            {FOOD_INVENTORY.map((item) => {
+            {foodInventory.map((item) => {
               const isSelected = selectedFood?.id === item.id;
               const isMatchingSearch = foodSearchQuery
                 ? item.name.toLowerCase().includes(foodSearchQuery.toLowerCase()) ||
@@ -2056,7 +2067,9 @@ export default function WardenMainScreen() {
                 : false;
 
               return (
-                <div
+                <button
+                  type="button"
+                  aria-label={`${item.name}, ${item.category}`}
                   key={item.id}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2113,7 +2126,16 @@ export default function WardenMainScreen() {
               <input
                 type="text"
                 value={foodSearchQuery}
-                onChange={(e) => setFoodSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFoodSearchQuery(value);
+                  const query = value.trim().toLowerCase();
+                  if (!query) return;
+                  const match = foodInventory.find(
+                    (item) => item.name.toLowerCase().includes(query) || item.category.toLowerCase().includes(query),
+                  );
+                  if (match) setSelectedFood(match);
+                }}
                 placeholder="Search nutrition inventory..."
                 className="w-full bg-transparent text-[11px] text-white/90 placeholder-[#6D7385] outline-none font-normal"
               />

@@ -12,8 +12,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       text,
-      provider = 'fish_audio',
-      speaker = 'default',
+      provider = 'rime',
+      speaker = 'abbie',
       modelId,
       speedAlpha = 1.0,
     } = body;
@@ -128,47 +128,20 @@ export async function POST(request: Request) {
         }
       }
 
-      // Fallback to Rime if available in environment
-      const rimeApiKey = process.env.RIME_API_KEY;
-      if (rimeApiKey) {
-        const rimeRes = await fetch('https://users.rime.ai/v1/rime-tts', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${rimeApiKey}`,
-            'Content-Type': 'application/json',
-            Accept: 'audio/mp3',
-          },
-          body: JSON.stringify({
-            text: cleanText,
-            speaker: 'abbie',
-            modelId: 'mistv2',
-            speedAlpha: 1.0,
-          }),
-        });
-
-        if (rimeRes.ok) {
-          const audioBuffer = await rimeRes.arrayBuffer();
-          return new Response(audioBuffer, {
-            headers: {
-              'Content-Type': 'audio/mpeg',
-              'Content-Length': audioBuffer.byteLength.toString(),
-              'Cache-Control': 'no-cache',
-              'X-TTS-Provider': 'rime-fallback',
-            },
-          });
-        }
-      }
-
-      return NextResponse.json(
-        { error: 'Fish Audio TTS error and fallback failed' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Fish Audio TTS failed' }, { status: 502 });
     }
 
     // 3. Rime AI TTS
     if (provider === 'rime') {
       const raw = [body.apiKey, request.headers.get('x-rime-api-key'), process.env.RIME_API_KEY].filter(Boolean).join(',');
       const keys = Array.from(new Set(parseKeys(raw)));
+
+      if (keys.length === 0) {
+        return NextResponse.json(
+          { error: 'RIME_API_KEY is not configured', code: 'TTS_PROVIDER_NOT_CONFIGURED', configured: false },
+          { status: 503 },
+        );
+      }
 
       for (const apiKey of keys) {
         const rimeRes = await fetch('https://users.rime.ai/v1/rime-tts', {

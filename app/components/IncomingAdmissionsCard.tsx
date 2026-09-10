@@ -35,6 +35,7 @@ export function IncomingAdmissionsCard({
   const [admissions, setAdmissions] = useState<IncomingAdmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Swipe left to close
   const [dragOffset, setDragOffset] = useState(0);
@@ -67,11 +68,17 @@ export function IncomingAdmissionsCard({
 
   const handleAction = async (id: string, action: string, bedNumber?: string) => {
     try {
+      setActionError(null);
       const res = await fetch("/api/warden/admissions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, action, bed_number: bedNumber }),
       });
+      const result = await res.json();
+      if (!res.ok) {
+        setActionError(result.error || 'The action could not be completed.');
+        return;
+      }
       if (res.ok) {
         const notice =
           action === "reserve_bed"
@@ -85,6 +92,7 @@ export function IncomingAdmissionsCard({
       }
     } catch (err) {
       console.error("Failed to execute admission action:", err);
+      setActionError("Could not connect to admissions operations.");
     }
   };
 
@@ -166,6 +174,11 @@ export function IncomingAdmissionsCard({
           <span>✓ {actionNotice}</span>
         </div>
       )}
+      {actionError && (
+        <div className="rounded-xl border border-[#E61E67]/35 bg-[#E61E67]/10 px-3 py-2 text-[10px] text-[#FF9DB2]">
+          ⚠️ {actionError}
+        </div>
+      )}
 
       {/* Admissions List */}
       <div className="relative flex-1 overflow-y-auto max-h-[360px] pr-1 flex flex-col gap-3 custom-scrollbar">
@@ -218,7 +231,7 @@ export function IncomingAdmissionsCard({
                       {adm.acuity}
                     </span>
                     <span className="text-[9.5px] font-mono px-1.5 py-0.5 rounded bg-[#1ECCE6]/20 text-[#1ECCE6] font-bold">
-                      ETA {adm.eta_minutes}m
+                      {adm.eta_minutes > 0 ? `ETA ${adm.eta_minutes}m` : `OVERDUE ${Math.abs(adm.eta_minutes)}m`}
                     </span>
                   </div>
                 </div>
@@ -250,14 +263,18 @@ export function IncomingAdmissionsCard({
                     <button
                       type="button"
                       onClick={() => handleAction(adm.id, "reserve_bed", adm.staged_bed_number)}
-                      className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[#C6CBD9] text-[9.5px] font-medium transition-colors cursor-pointer"
+                      disabled={adm.staged_bed_status !== "available"}
+                      title={adm.staged_bed_status !== "available" ? "Only an available bed can be reserved" : "Reserve this bed"}
+                      className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[#C6CBD9] text-[9.5px] font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-35"
                     >
                       Reserve
                     </button>
                     <button
                       type="button"
                       onClick={() => handleAction(adm.id, "mark_admitted", adm.staged_bed_number)}
-                      className="px-2 py-0.5 rounded bg-[#1ECCE6] hover:bg-[#1ECCE6]/90 text-black text-[9.5px] font-semibold transition-colors cursor-pointer"
+                      disabled={adm.blockers.length > 0 || !["available", "reserved"].includes(adm.staged_bed_status || "")}
+                      title={adm.blockers.length > 0 ? "Resolve blockers before admission" : "Admit patient"}
+                      className="px-2 py-0.5 rounded bg-[#1ECCE6] hover:bg-[#1ECCE6]/90 text-black text-[9.5px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-35"
                     >
                       Admit
                     </button>

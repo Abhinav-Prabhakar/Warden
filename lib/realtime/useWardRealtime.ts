@@ -16,6 +16,7 @@ const WARD_TABLES = [
   "staff",
   "vitals",
   "medication_requests",
+  "nutrition_inventory",
   "system_events",
 ] as const;
 

@@ -236,11 +236,10 @@ export function useVoiceAgent() {
         await playAudioBlob(blob);
       } catch (err: any) {
         console.warn("TTS synthesis error:", err?.message);
-        // Fallback to browser synthesis if online TTS provider fails
-        if (typeof window !== "undefined" && "speechSynthesis" in window) {
-          const utterance = new SpeechSynthesisUtterance(text);
-          window.speechSynthesis.speak(utterance);
-        }
+        setIsPlayingAudio(false);
+        setOrbState("breathing");
+        setOrbSpeed(1.0);
+        setStatusText(`Voice unavailable · ${err?.message || "TTS provider failed"}`);
       } finally {
         isSynthesizingRef.current = false;
       }

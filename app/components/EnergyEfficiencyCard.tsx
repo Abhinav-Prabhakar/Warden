@@ -449,8 +449,8 @@ export function EnergyEfficiencyCard({
             {/* 24-Hour Sparkline Chart */}
             <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col gap-2">
               <div className="flex items-center justify-between text-[10px]">
-                <span className="font-semibold text-white">24h Electrical Consumption Trend</span>
-                <span className="text-[#8E92A4]">Actual vs Standard Target</span>
+                <span className="font-semibold text-white">Estimated 24h Load Profile</span>
+                <span className="text-[#8E92A4]">Modelled from current occupancy vs baseline</span>
               </div>
 
               <div className="h-16 w-full relative flex items-end">

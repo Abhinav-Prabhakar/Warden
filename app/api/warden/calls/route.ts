@@ -63,7 +63,7 @@ export async function GET(request: Request) {
         id: e.id,
         patientId: meta.patient_id,
         patientName: meta.patient_name || 'Inpatient',
-        bedNumber: meta.bed_number || 'Bed',
+        bedNumber: String(meta.bed_number || 'Bed').replace(/^Bed\s+Bed\s+/i, 'Bed '),
         floor: meta.floor || floorNumber,
         phoneNumber: meta.phone_number || '+1 (555) 019-2834',
         purpose: meta.purpose || 'Clinical Check-in',
@@ -105,6 +105,8 @@ export async function GET(request: Request) {
       .map((b: any) => {
         const rawBedNum = String(b.bed_number);
         const bedLabel = rawBedNum.startsWith('Bed') ? rawBedNum : `Bed ${rawBedNum}`;
+        const numericBed = Number.parseInt(rawBedNum.match(/\d+/)?.[0] || '', 10);
+        const extension = Number.isFinite(numericBed) ? String((numericBed % 90) + 10).padStart(2, '0') : '00';
         return {
           bedId: b.id,
           bedNumber: bedLabel,
@@ -113,7 +115,7 @@ export async function GET(request: Request) {
           patientName: `${b.patient.first_name} ${b.patient.last_name}`,
           acuity: b.patient.acuity,
           condition: b.patient.patient_conditions?.[0]?.name || 'Acute Care',
-          phone: `+1 (555) 01${(b.bed_number % 90 + 10).toString().padStart(2, '0')}-${b.room?.room_number || '701'}`,
+          phone: `+1 (555) 01${extension}-${b.room?.room_number || '701'}`,
         };
       });
 
@@ -125,6 +127,11 @@ export async function GET(request: Request) {
         key: k,
         purpose: CALL_INTENTS[k].purpose,
       })),
+      telephony: {
+        liveConfigured: Boolean(process.env.LIVEKIT_URL && process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET),
+        simulationEnabled: process.env.WARDEN_ENABLE_CALL_SIMULATION === 'true',
+        mode: process.env.WARDEN_ENABLE_CALL_SIMULATION === 'true' ? 'simulation' : 'unavailable',
+      },
     });
   } catch (err: any) {
     console.error('Calls API GET exception:', err);
@@ -134,6 +141,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    if (process.env.WARDEN_ENABLE_CALL_SIMULATION !== 'true') {
+      return NextResponse.json(
+        {
+          error: 'Live outbound calling is not connected. Configure LiveKit SIP; simulation is disabled.',
+          code: 'LIVE_TELEPHONY_NOT_CONFIGURED',
+        },
+        { status: 503 },
+      );
+    }
     const admin = createAdminClient();
     const body = await request.json();
     const {

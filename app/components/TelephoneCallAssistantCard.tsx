@@ -61,6 +61,7 @@ export function TelephoneCallAssistantCard({
   const [callHistory, setCallHistory] = useState<CallLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [telephony, setTelephony] = useState({ liveConfigured: false, simulationEnabled: false, mode: "unavailable" });
 
   const [activeTab, setActiveTab] = useState<"dial" | "active" | "history">("dial");
   const [selectedCandidate, setSelectedCandidate] = useState<CallCandidate | null>(null);
@@ -90,6 +91,7 @@ export function TelephoneCallAssistantCard({
         if (data && !data.error) {
           setCandidates(data.callCandidates || []);
           setCallHistory(data.calls || []);
+          setTelephony(data.telephony || { liveConfigured: false, simulationEnabled: false, mode: "unavailable" });
           if (data.callCandidates && data.callCandidates.length > 0 && !selectedCandidate) {
             setSelectedCandidate(data.callCandidates[0]);
           }
@@ -122,6 +124,10 @@ export function TelephoneCallAssistantCard({
 
   // Initiate an automated phone call
   const handleStartCall = async (candidateToCall?: CallCandidate) => {
+    if (!telephony.simulationEnabled) {
+      setError("LiveKit SIP is not configured. No call was placed.");
+      return;
+    }
     const target = candidateToCall || selectedCandidate;
     if (!target) return;
 
@@ -282,10 +288,12 @@ export function TelephoneCallAssistantCard({
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold text-white tracking-[-0.01em]">Telephone Care Agent</h3>
               <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-[#C6CBD9]">
-                SIP TRUNK · AUTONOMOUS
+                {telephony.simulationEnabled ? "SIMULATION" : "LIVE CALLS OFFLINE"}
               </span>
             </div>
-            <p className="text-[10px] text-[#8E92A4]">Automated Patient Calls & Live Clinical Notes</p>
+            <p className="text-[10px] text-[#8E92A4]">
+              {telephony.simulationEnabled ? "Clearly labeled call simulation" : "Configure LiveKit SIP to place patient calls"}
+            </p>
           </div>
         </div>
 
@@ -409,12 +417,13 @@ export function TelephoneCallAssistantCard({
                     <button
                       type="button"
                       onClick={() => handleStartCall(c)}
-                      className="px-3 py-1.5 rounded-lg bg-[#24A951] hover:bg-[#24A951]/90 text-black font-semibold text-[10.5px] tracking-wide flex items-center gap-1 shadow-[0_0_10px_rgba(36,169,81,0.3)] transition-all cursor-pointer shrink-0"
+                      disabled={!telephony.simulationEnabled}
+                      className="px-3 py-1.5 rounded-lg bg-[#24A951] hover:bg-[#24A951]/90 text-black font-semibold text-[10.5px] tracking-wide flex items-center gap-1 shadow-[0_0_10px_rgba(36,169,81,0.3)] transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-[#8E92A4] disabled:shadow-none"
                     >
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
                       </svg>
-                      <span>Call Now</span>
+                      <span>{telephony.simulationEnabled ? "Run Simulation" : "Unavailable"}</span>
                     </button>
                   </div>
                 ))
@@ -450,7 +459,9 @@ export function TelephoneCallAssistantCard({
                         : activeCallStep === 2
                         ? "Agent Speaking with Patient..."
                         : "Listening & Taking Clinical Notes..."
-                      : "Call Completed · Notes Logged"}
+                      : activeCompletedCall
+                      ? "Simulation Completed · Notes Logged"
+                      : "No Call in Progress"}
                   </div>
                   <div className="text-[10px] text-[#8E92A4]">
                     {selectedCandidate ? `${selectedCandidate.patientName} (${selectedCandidate.bedNumber})` : "Patient Telephony Session"}
@@ -459,7 +470,7 @@ export function TelephoneCallAssistantCard({
               </div>
 
               <div className="text-right font-mono text-sm font-bold text-[#1ECCE6]">
-                {formatTimer(callDuration || 52)}
+                {formatTimer(isCalling || activeCompletedCall ? callDuration : 0)}
               </div>
             </div>
 
@@ -477,7 +488,7 @@ export function TelephoneCallAssistantCard({
 
               {liveNeeds.length === 0 ? (
                 <div className="text-[11px] text-white/60 italic py-1">
-                  Listening to conversation... extracting patient needs, pain scores, and comfort requests.
+                  {isCalling ? "Listening to the simulated conversation..." : "No call data yet."}
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5">
@@ -506,7 +517,9 @@ export function TelephoneCallAssistantCard({
               </span>
 
               {liveTranscript.length === 0 ? (
-                <div className="text-[10px] text-[#7A8095] italic">Awaiting call connection...</div>
+                <div className="text-[10px] text-[#7A8095] italic">
+                  {isCalling ? "Awaiting simulated call connection..." : "No call in progress."}
+                </div>
               ) : (
                 liveTranscript.map((t, idx) => (
                   <div

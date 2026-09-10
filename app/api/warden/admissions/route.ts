@@ -54,7 +54,7 @@ export async function GET() {
       const arrivalTime = meta.expected_arrival
         ? new Date(meta.expected_arrival).getTime()
         : now + 30 * 60 * 1000;
-      const diffMins = Math.max(1, Math.round((arrivalTime - now) / 60000));
+      const diffMins = Math.round((arrivalTime - now) / 60000);
 
       const stagedBedKey = (meta.staged_bed_number || '').toLowerCase().trim();
       const liveBedStatus = bedStatusMap.get(stagedBedKey) || 'unknown';
@@ -174,29 +174,57 @@ export async function PATCH(request: Request) {
     }
 
     const meta = (event.metadata as any) || {};
+    const targetBed = bed_number || meta.staged_bed_number;
+    let liveBed: { id: string; status: string | null } | null = null;
+    if (targetBed) {
+      const numericBed = String(targetBed).replace(/^Bed\s*/i, '').trim();
+      const { data } = await admin
+        .from('beds')
+        .select('id, status')
+        .in('bed_number', [targetBed, numericBed])
+        .limit(1)
+        .maybeSingle();
+      liveBed = data;
+    }
+
+    if (!['reserve_bed', 'expedite_cleaning', 'mark_admitted'].includes(action)) {
+      return NextResponse.json({ error: `Unsupported admission action: ${action}` }, { status: 400 });
+    }
 
     if (action === 'reserve_bed') {
-      const targetBed = bed_number || meta.staged_bed_number;
-      if (targetBed) {
-        // Update bed status to 'reserved' in beds table
-        await admin
-          .from('beds')
-          .update({ status: 'reserved' })
-          .ilike('bed_number', `%${targetBed.replace('Bed', '').trim()}%`);
+      if (!liveBed || liveBed.status !== 'available') {
+        return NextResponse.json({ error: `${targetBed || 'Target bed'} is not available and cannot be reserved.` }, { status: 409 });
+      }
+      const { error: bedUpdateError } = await admin
+        .from('beds')
+        .update({ status: 'reserved' })
+        .eq('id', liveBed.id);
+      if (bedUpdateError) {
+        return NextResponse.json({ error: `Bed reservation failed: ${bedUpdateError.message}` }, { status: 500 });
       }
       meta.status = 'staged';
     } else if (action === 'expedite_cleaning') {
-      meta.blockers = meta.blockers.map((b: string) =>
+      const blockers = Array.isArray(meta.blockers) ? meta.blockers : [];
+      if (!blockers.some((b: string) => /disinfection|cleaning/i.test(b))) {
+        return NextResponse.json({ error: 'This admission has no cleaning blocker to expedite.' }, { status: 409 });
+      }
+      meta.blockers = blockers.map((b: string) =>
         b.includes('Disinfection') || b.includes('cleaning') ? `${b} [EXPEDITED STAT]` : b
       );
     } else if (action === 'mark_admitted') {
+      if ((meta.blockers || []).length > 0) {
+        return NextResponse.json({ error: 'Resolve all pre-admission blockers before admitting the patient.' }, { status: 409 });
+      }
+      if (!liveBed || !['available', 'reserved'].includes(liveBed.status || '')) {
+        return NextResponse.json({ error: `${targetBed || 'Target bed'} is not ready for admission.` }, { status: 409 });
+      }
       meta.status = 'admitted';
-      const targetBed = bed_number || meta.staged_bed_number;
-      if (targetBed) {
-        await admin
-          .from('beds')
-          .update({ status: 'occupied' })
-          .ilike('bed_number', `%${targetBed.replace('Bed', '').trim()}%`);
+      const { error: bedUpdateError } = await admin
+        .from('beds')
+        .update({ status: 'occupied' })
+        .eq('id', liveBed.id);
+      if (bedUpdateError) {
+        return NextResponse.json({ error: `Admission failed: ${bedUpdateError.message}` }, { status: 500 });
       }
     }
 

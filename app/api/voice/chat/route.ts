@@ -70,26 +70,14 @@ export async function POST(request: Request) {
         : 'https://api.groq.com/openai/v1/chat/completions';
 
     if (keys.length === 0) {
-      // Graceful fallback response if keys are missing
-      const mockResponse = `Warden operational assistant: acknowledged "${message}". Live telemetry and ward model active.`;
-      if (stream) {
-        const encoder = new TextEncoder();
-        const customStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: mockResponse, done: false })}\n\n`));
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: '', done: true })}\n\n`));
-            controller.close();
-          },
-        });
-        return new Response(customStream, {
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            Connection: 'keep-alive',
-          },
-        });
-      }
-      return NextResponse.json({ text: mockResponse });
+      return NextResponse.json(
+        {
+          error: `${provider === 'openai' ? 'OPENAI_API_KEY' : 'GROQ_API_KEY'} is not configured`,
+          code: 'REASONING_PROVIDER_NOT_CONFIGURED',
+          configured: false,
+        },
+        { status: 503 },
+      );
     }
 
     // Helper to call upstream LLM with failover across key pool

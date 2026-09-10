@@ -162,7 +162,7 @@ export async function GET(request: Request) {
         powerDrawKw: parseFloat(((hasOccupant ? 2.8 : 0.4) * (lightsOn ? 1 : 0.4) * (acOn ? 1 : 0.3)).toFixed(1)),
         beds: r.beds.map((b: any) => ({
           id: b.id,
-          name: `Bed ${b.bed_number}`,
+          name: /^bed\s+/i.test(String(b.bed_number)) ? String(b.bed_number) : `Bed ${b.bed_number}`,
           isOccupied: Boolean(b.patient) && b.status !== 'available',
           status: b.status,
         })),
