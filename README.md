@@ -6,7 +6,7 @@
 
 Voice-first hospital operations for nurses, ward coordinators, and support staff.
 
-[Live prototype](https://warden-eight-theta.vercel.app/) · [Quick start](#quick-start) · [Architecture](#architecture) · [Telephone backend](backend/README.md) · [Voice evidence](backend/RIME_EVIDENCE.md)
+[Live prototype](https://warden-eight-theta.vercel.app/) · [Demo Video](https://www.loom.com/share/d14e6f0ff4c54037bf1943cfb8d427f4) . [Quick start](#quick-start) · [Architecture](#architecture) · [Telephone backend](backend/README.md) · [Voice evidence](backend/RIME_EVIDENCE.md)
 
 **Next.js 16 · React 19 · TypeScript · Supabase · LiveKit · Rime**
 
